@@ -1,0 +1,21 @@
+{
+  "name": "wsip",
+  "version": "0.0.1",
+  "description": "A simple static website gerneator.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm run markdown_test",
+    "markdown_test": "npx ts-node test/markdown_test.ts"
+  },
+  "keywords": [
+    "staic-website-generator",
+    "staic-blog-generator"
+  ],
+  "author": "wuch",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
