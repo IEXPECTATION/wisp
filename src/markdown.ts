@@ -920,6 +920,7 @@ type heading = {
   Raw: string,
   Text: string,
   Level: number,
+  Children: token[],
 }
 
 type hr = {
@@ -942,8 +943,15 @@ class Parser {
 
 ** *
 \`\`\` c
-printf("Hello World");
+printf("Hello World!");
 \`\`\`
+
+~~~ c
+printf("Hello World!");
+~~~
+
+    printf("Hello World!");
+    return 0;
 `;
     this.Parse(input);
 
@@ -973,8 +981,28 @@ printf("Hello World");
         continue;
       }
 
+      if ((skip = this.indentedCode(input)) > 0) {
+        input = input.substring(skip);
+        continue;
+      }
+
       break;
     }
+  }
+
+  private skipLeaddingWhiteSpace(input: string, offset: number = 0): { Skip: number, NumberOfSpaces: number } {
+    let count = 0;
+    while (true) {
+      if (input[offset] == ' ') {
+        count++;
+      } else if (input[offset] == '\t') {
+        count += 4;
+      } else {
+        break;
+      }
+      offset++;
+    }
+    return { Skip: offset, NumberOfSpaces: count };
   }
 
   private blank(input: string): number {
@@ -992,21 +1020,6 @@ printf("Hello World");
     }
 
     return skip;
-  }
-
-  private skipLeaddingWhiteSpace(input: string, offset: number = 0): { Skip: number, NumberOfSpaces: number } {
-    let count = 0;
-    while (true) {
-      if (input[offset] == ' ') {
-        count++;
-      } else if (input[offset] == '\t') {
-        count += 4;
-      } else {
-        break;
-      }
-      offset++;
-    }
-    return { Skip: offset, NumberOfSpaces: count };
   }
 
   private headingPrefix(input: string): { Skip: number, Level: number } | undefined {
@@ -1052,7 +1065,8 @@ printf("Hello World");
       Name: "Heading",
       Raw: input.substring(0, skip),
       Text: input.substring(prefix.Skip, end),
-      Level: prefix.Level
+      Level: prefix.Level,
+      Children: []
     }));
 
     return skip;
@@ -1190,7 +1204,7 @@ printf("Hello World");
             Text: text,
             Language: language
           });
-          return prefix.Skip;
+          return raw.length;
         }
       }
 
@@ -1222,7 +1236,45 @@ printf("Hello World");
   }
 
   private indentedCode(input: string): number {
-    return 0;
+    let prefix = this.indentedCodePrefix(input);
+    if (prefix == undefined) {
+      return 0;
+    }
+
+    let text = "";
+    let raw = "";
+    let start = TabSize, end = prefix.Skip;
+
+    while (true) {
+      // find the end of current line.
+      while (end < input.length && input[end] != '\n') {
+        end++;
+      }
+      if (end < input.length) {
+        end++;
+      }
+      text += input.substring(start, end);
+      raw += input.substring(0, end);
+      if (end == input.length) {
+        break;
+      }
+
+      input = input.substring(end);
+
+      prefix = this.indentedCodePrefix(input);
+      if (prefix == undefined) {
+        break;
+      }
+      end = prefix.Skip;
+    }
+
+    this.nodes.push({
+      Name: "IndentedCode",
+      Raw: raw,
+      Text: text,
+      Language: "",
+    });
+    return raw.length;
   }
 
   private stack: token[] = [];
