@@ -913,7 +913,11 @@
 
 const TabSize = 4;
 
-type token = heading | hr | code;
+type token = blank | heading | hr | code | blockQuote | paragraph;
+
+type blank = {
+  Name: "Blank";
+}
 
 type heading = {
   Name: "Heading",
@@ -934,6 +938,18 @@ type code = {
   Language: string
 }
 
+type blockQuote = {
+  Name: "BlockQuote",
+  Children: token[];
+};
+
+type paragraph = {
+  Name: "Paragraph",
+  Raw: "",
+  Compleleted: boolean,
+  Children: token[];
+}
+
 class Parser {
   Main() {
     let input = `
@@ -952,17 +968,35 @@ printf("Hello World!");
 
     printf("Hello World!");
     return 0;
+
+      printf("Hello World");
+***
+
+> > # Heading1
 `;
     this.Parse(input);
 
-    console.dir(this.nodes, { depth: Infinity });
+    console.dir(this.root, { depth: Infinity });
   }
 
   Parse(input: string) {
     let skip = 0;
     while (input.length > 0) {
+      if (this.lastToken.length > 0) {
+        if (this.lastToken == "Blank") {
+          this.blankPostAction(input);
+        }
+
+        this.lastToken = "";
+      }
+
       if ((skip = this.blank(input)) > 0) {
         input = input.substring(skip);
+        if (input.length == 0) {
+          this.lastToken = "Blank";
+          break;
+        }
+        this.blankPostAction(input);
         continue;
       }
 
@@ -982,6 +1016,11 @@ printf("Hello World!");
       }
 
       if ((skip = this.indentedCode(input)) > 0) {
+        input = input.substring(skip);
+        continue;
+      }
+
+      if ((skip = this.blockQuote(input)) > 0) {
         input = input.substring(skip);
         continue;
       }
@@ -1020,6 +1059,26 @@ printf("Hello World!");
     }
 
     return skip;
+  }
+
+  private blankPostAction(input: string) {
+    if (this.stack.length > 0 && this.stack[this.stack.length - 1].Name == "BlockQuote") {
+      if (this.blockQuotePrefix(input) == undefined) {
+        // The input could be like:
+        // >
+        // *** (or whatever)
+        // In this scenario, it indicates that the block quote is completed.
+        this.nodes = this.root;
+        this.stack = [];
+      } else {
+        // >
+        // > other paragraph
+        // In this scenario, it indicates that the paragraph is completed.
+        if (this.nodes.length > 0 && this.nodes[this.nodes.length - 1].Name == "Paragraph") {
+
+        }
+      }
+    }
   }
 
   private headingPrefix(input: string): { Skip: number, Level: number } | undefined {
@@ -1109,22 +1168,22 @@ printf("Hello World!");
   }
 
   private fencedCodePrefix(input: string): { Skip: number, Bullet: string, Length: number } | undefined {
-    let { Skip: skip, NumberOfSpaces: numberOfSpace } = this.skipLeaddingWhiteSpace(input);
-    if (numberOfSpace >= TabSize || skip == input.length) {
+    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+    if (numberOfSpaces >= TabSize || skip == input.length) {
       return undefined;
     }
     let bullet = input[skip];
     if (bullet != '`' && bullet != '~') {
       return undefined;
     }
-    numberOfSpace = 1;
+    numberOfSpaces = 1;
     while (++skip < input.length && input[skip] == bullet) {
-      numberOfSpace++;
+      numberOfSpaces++;
     }
-    if (numberOfSpace < 3) {
+    if (numberOfSpaces < 3) {
       return undefined;
     }
-    return { Skip: skip, Bullet: bullet, Length: numberOfSpace };
+    return { Skip: skip, Bullet: bullet, Length: numberOfSpaces };
   }
 
   private fencedCode(input: string): number {
@@ -1260,6 +1319,12 @@ printf("Hello World!");
       }
 
       input = input.substring(end);
+      end = this.blank(input);
+      if (end > 0) {
+        text += input.substring(0, end);
+        raw += input.substring(0, end);
+        input = input.substring(end);
+      }
 
       prefix = this.indentedCodePrefix(input);
       if (prefix == undefined) {
@@ -1277,6 +1342,91 @@ printf("Hello World!");
     return raw.length;
   }
 
+  private def(input: string): number {
+    // TODO: TBD
+    return 0;
+  }
+
+  private html(input: string): number {
+    // TODO: TBD
+    return 0;
+  }
+
+  private blockQuotePrefix(input: string): number | undefined {
+    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+    if (numberOfSpaces >= TabSize || skip == input.length) {
+      return undefined;
+    }
+
+    if (input[skip] != '>') {
+      return undefined;
+    }
+
+    if (input[++skip] == ' ') {
+      skip++;
+    }
+
+    return skip;
+  }
+
+  private blockQuote(input: string): number {
+    let prefix = this.blockQuotePrefix(input);
+    if (prefix == undefined) {
+      return 0;
+    }
+
+    if (this.stack.length == 0) {
+      let end = prefix;
+      while (true) {
+        let qb: blockQuote = {
+          Name: "BlockQuote",
+          Children: []
+        };
+
+        this.nodes.push(qb);
+        this.stack.push(qb);
+        this.nodes = qb.Children;
+
+        input = input.substring(prefix);
+        prefix = this.blockQuotePrefix(input);
+        if (prefix == undefined) {
+          break;
+        }
+        end += prefix;
+      }
+
+      return end;
+    }
+
+    // let bp = this.stack.length;
+    // while (bp > 0) {
+    //   if (this.stack[bp].Name != "BlockQuote") {
+    //     let qb: blockQuote = {
+    //       Name: "BlockQuote",
+    //       Children: []
+    //     };
+    //     this.stack.push(qb);
+    //     this.nodes = qb.Children;
+    //     break;
+    //   }
+
+    //   bp--;
+    // }
+
+    return prefix;
+  }
+
+  private list(input: string): number {
+    // TODO: TBD
+    return 0;
+  }
+
+  private paragraph(input: string): number {
+    // TODO: TBD
+    return 0;
+  }
+
+  private lastToken: string = "";
   private stack: token[] = [];
   private root: token[] = [];
   private nodes: token[] = this.root;
