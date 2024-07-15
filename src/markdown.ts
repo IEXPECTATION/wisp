@@ -913,11 +913,7 @@
 
 const TabSize = 4;
 
-type token = blank | heading | hr | code | blockQuote | paragraph;
-
-type blank = {
-  Name: "Blank";
-}
+type token = heading | hr | code | blockQuote | paragraph;
 
 type heading = {
   Name: "Heading",
@@ -946,7 +942,7 @@ type blockQuote = {
 type paragraph = {
   Name: "Paragraph",
   Raw: "",
-  Compleleted: boolean,
+  Completed: boolean,
   Children: token[];
 }
 
@@ -973,7 +969,34 @@ printf("Hello World!");
 ***
 
 > > # Heading1
+***
+
+>> ***
+***
+
+>> ***
+    printf("Hello World!");
+
+>> ***
+>> ***
+
+> ***
+>> ***
+
+> ***
+>> ***
+> ***
+
+> ***
+>> ***
+> ***
+>>> ---
+
+> # Heading1
+>   
+abc
 `;
+
     this.Parse(input);
 
     console.dir(this.root, { depth: Infinity });
@@ -982,51 +1005,83 @@ printf("Hello World!");
   Parse(input: string) {
     let skip = 0;
     while (input.length > 0) {
-      if (this.lastToken.length > 0) {
-        if (this.lastToken == "Blank") {
-          this.blankPostAction(input);
-        }
-
-        this.lastToken = "";
-      }
+      this.postAction(input);
 
       if ((skip = this.blank(input)) > 0) {
         input = input.substring(skip);
-        if (input.length == 0) {
-          this.lastToken = "Blank";
-          break;
-        }
-        this.blankPostAction(input);
+        this.lastToken = "Blank";
         continue;
       }
 
       if ((skip = this.hr(input)) > 0) {
         input = input.substring(skip);
+        this.lastToken = "Hr";
         continue;
       }
 
       if ((skip = this.heading(input)) > 0) {
         input = input.substring(skip);
+        this.lastToken = "Heading";
         continue;
       }
 
       if ((skip = this.fencedCode(input)) > 0) {
         input = input.substring(skip);
+        this.lastToken = "FencedCode";
         continue;
       }
 
       if ((skip = this.indentedCode(input)) > 0) {
         input = input.substring(skip);
+        this.lastToken = "IndentedCode";
         continue;
       }
 
       if ((skip = this.blockQuote(input)) > 0) {
         input = input.substring(skip);
+        this.lastToken = "BlockQuote";
         continue;
       }
 
       break;
     }
+  }
+
+  private postAction(input: string) {
+    if (this.lastToken == "BlockQuote") {
+      return;
+    }
+
+    if (this.getLastToken(this.stack)?.Name == "BlockQuote" && 
+        this.lastToken != "Paragraph" && 
+        this.blockQuotePrefix(input) == undefined) {
+      // The input could be like:
+      // > # Heading1
+      // *** (or whatever)
+      // In this scenario, it indicates that the block quote is completed.
+      while (this.stack.length > 0) {
+        if (this.getLastToken(this.stack)?.Name != "BlockQuote") {
+          break;
+        }
+        this.stack.pop();
+      }
+      this.nodes = this.root;
+    }
+
+    let previousToken = this.getLastToken(this.nodes);
+    if (this.lastToken == "Blank" && previousToken?.Name == "Paragraph" && !previousToken.Completed) {
+      previousToken.Completed = true;
+    }
+
+    this.lastToken = "";
+  }
+
+  private getLastToken(tokens: token[]): token | undefined {
+    let position = tokens.length;
+    if (position > 0) {
+      return tokens[position - 1];
+    }
+    return undefined;
   }
 
   private skipLeaddingWhiteSpace(input: string, offset: number = 0): { Skip: number, NumberOfSpaces: number } {
@@ -1062,22 +1117,29 @@ printf("Hello World!");
   }
 
   private blankPostAction(input: string) {
-    if (this.stack.length > 0 && this.stack[this.stack.length - 1].Name == "BlockQuote") {
+    if (this.getLastToken(this.stack)?.Name == "BlockQuote") {
       if (this.blockQuotePrefix(input) == undefined) {
         // The input could be like:
         // >
         // *** (or whatever)
         // In this scenario, it indicates that the block quote is completed.
-        this.nodes = this.root;
-        this.stack = [];
+        while (this.stack.length > 0) {
+          if (this.getLastToken(this.stack)?.Name != "BlockQuote") {
+            break;
+          }
+          this.stack.pop();
+          this.nodes = this.root;
+        }
       } else {
         // >
         // > other paragraph
         // In this scenario, it indicates that the paragraph is completed.
-        if (this.nodes.length > 0 && this.nodes[this.nodes.length - 1].Name == "Paragraph") {
+        if (this.getLastToken(this.nodes)?.Name == "Paragraph") {
 
         }
       }
+    } else if (this.getLastToken(this.nodes)?.Name == "Paragraph") {
+
     }
   }
 
@@ -1161,6 +1223,10 @@ printf("Hello World!");
 
     if (count < 3)
       return 0;
+
+    if (skip < input.length) {
+      skip++;
+    }
 
     this.nodes.push({ Name: "Hr" });
 
@@ -1375,8 +1441,24 @@ printf("Hello World!");
       return 0;
     }
 
-    if (this.stack.length == 0) {
-      let end = prefix;
+    let end = prefix;
+    let bp = this.stack.length;
+
+    // Skip the exited block quote markers.
+    while (true) {
+      if (bp == 0 || this.stack[--bp].Name != 'BlockQuote') {
+        break;
+      }
+      input = input.substring(prefix);
+      prefix = this.blockQuotePrefix(input);
+      if (prefix == undefined) {
+        break;
+      }
+      end += prefix
+    }
+
+    // Add the remaining block quote markers.
+    if (prefix != undefined) {
       while (true) {
         let qb: blockQuote = {
           Name: "BlockQuote",
@@ -1394,26 +1476,9 @@ printf("Hello World!");
         }
         end += prefix;
       }
-
-      return end;
     }
 
-    // let bp = this.stack.length;
-    // while (bp > 0) {
-    //   if (this.stack[bp].Name != "BlockQuote") {
-    //     let qb: blockQuote = {
-    //       Name: "BlockQuote",
-    //       Children: []
-    //     };
-    //     this.stack.push(qb);
-    //     this.nodes = qb.Children;
-    //     break;
-    //   }
-
-    //   bp--;
-    // }
-
-    return prefix;
+    return end;
   }
 
   private list(input: string): number {
