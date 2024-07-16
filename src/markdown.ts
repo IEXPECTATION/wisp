@@ -1,5 +1,7 @@
 // export type Token = rawToken | textToken | headingToken | codeToken | blockQuoteToken | listToken | listItemToken;
 
+import { FencedCode } from "../trash/240628/markdown/node";
+
 // type rawToken = {
 //   Raw: string;
 // };
@@ -921,18 +923,20 @@ type heading = {
   Text: string,
   Level: number,
   Children: token[],
-}
+};
 
 type hr = {
   Name: "Hr",
-}
+  Raw: string,
+};
 
 type code = {
-  Name: "FencedCode" | "IndentedCode"
+  Name: "FencedCode" | "IndentedCode",
   Raw: string,
   Text: string,
-  Language: string
-}
+  Language: string,
+  Completed: boolean,
+};
 
 type blockQuote = {
   Name: "BlockQuote",
@@ -944,17 +948,17 @@ type paragraph = {
   Raw: string,
   Completed: boolean,
   Children: token[];
-}
+};
 
 type list = {
   Name: "List",
   Children: listItem[];
-}
+};
 
 type listItem = {
   Name: "ListItem",
   Raw: string,
-}
+};
 
 class Parser {
   Main() {
@@ -1007,12 +1011,37 @@ printf("Hello World!");
 abc
 
 > abc
-abc
+def
 
 > abc
 ===
 
+> abc
+> ===
+
+> def
+> ---
+
+> abc
+>> ===
+
 edf
+===
+
+def
+
+===
+
+paragraph
+# Heading
+
+>     asdasd
+>     asdasd
+>     asdasd
+
+>     asdasd
+     asdasd
+     asdasd
 `;
 
     this.Parse(input);
@@ -1063,52 +1092,67 @@ edf
 
       if ((skip = this.paragraph(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "Paragraph";
         continue;
       }
     }
 
+    this.postAction(input);
     if (this.lastToken == "Paragraph") {
-      let token = this.getLastToken(this.tokens) as paragraph;
+      let token = this.getToken(this.tokens) as paragraph;
       token.Completed = true;
     }
   }
 
   private postAction(input: string) {
-    if (this.lastToken == "BlockQuote") {
+    let token = this.getToken(this.tokens);
+    if (token == undefined) {
       return;
     }
 
-    if (this.getLastToken(this.stack)?.Name == "BlockQuote" &&
-      this.lastToken != "Paragraph" &&
-      this.blockQuotePrefix(input) == undefined) {
+    if (this.lastToken != "Paragraph") {
+      let t = this.getToken(this.tokens, -2);
+      if (t?.Name == "Paragraph") {
+        t.Completed = true;
+      }
+    }
+
+    if (this.lastToken == "FencedCode" || this.lastToken == "IntendedCode") {
+      if ((this.getToken(this.stack)?.Name == "BlockQuote" && this.blockQuotePrefix(input) == undefined)) {
+        (token as code).Completed = true
+      }
+    }
+
+    if (this.getToken(this.stack)?.Name == "BlockQuote" &&
+      (token as paragraph).Completed ||
+      (this.lastToken != "Paragraph" && this.blockQuotePrefix(input) == undefined)) {
       // The input could be like:
       // > # Heading1
       // *** (or whatever)
       // In this scenario, it indicates that the block quote is completed.
       while (this.stack.length > 0) {
-        if (this.getLastToken(this.stack)?.Name != "BlockQuote") {
+        if (this.getToken(this.stack)?.Name != "BlockQuote") {
           break;
         }
         this.stack.pop();
       }
+      if (token.Name == "Paragraph") {
+        token.Completed = true;
+      }
       this.tokens = this.root;
-    }
-
-    let token = this.getLastToken(this.tokens);
-    if (this.lastToken == "Blank" && token?.Name == "Paragraph" && !token.Completed) {
-      token.Completed = true;
     }
 
     this.lastToken = "";
   }
 
-  private getLastToken(tokens: token[]): token | undefined {
-    let position = tokens.length;
-    if (position > 0) {
-      return tokens[position - 1];
+  private getToken(tokens: token[], index: number = -1): token | undefined {
+    let length = tokens.length;
+    if (length == 0) {
+      return undefined;
     }
-    return undefined;
+    if (index < 0) {
+      return tokens[length + index];
+    }
+    return tokens[index];
   }
 
   private skipLeaddingWhiteSpace(input: string, offset: number = 0): { Skip: number, NumberOfSpaces: number } {
@@ -1144,14 +1188,14 @@ edf
   }
 
   private blankPostAction(input: string) {
-    if (this.getLastToken(this.stack)?.Name == "BlockQuote") {
+    if (this.getToken(this.stack)?.Name == "BlockQuote") {
       if (this.blockQuotePrefix(input) == undefined) {
         // The input could be like:
         // >
         // *** (or whatever)
         // In this scenario, it indicates that the block quote is completed.
         while (this.stack.length > 0) {
-          if (this.getLastToken(this.stack)?.Name != "BlockQuote") {
+          if (this.getToken(this.stack)?.Name != "BlockQuote") {
             break;
           }
           this.stack.pop();
@@ -1161,11 +1205,11 @@ edf
         // >
         // > other paragraph
         // In this scenario, it indicates that the paragraph is completed.
-        if (this.getLastToken(this.tokens)?.Name == "Paragraph") {
+        if (this.getToken(this.tokens)?.Name == "Paragraph") {
 
         }
       }
-    } else if (this.getLastToken(this.tokens)?.Name == "Paragraph") {
+    } else if (this.getToken(this.tokens)?.Name == "Paragraph") {
 
     }
   }
@@ -1231,6 +1275,11 @@ edf
       return 0;
     }
 
+    let token = this.getToken(this.tokens);
+    if (bullet == '-' && token?.Name == "Paragraph" && !token.Completed) {
+      return 0;
+    }
+
     let count = 1;
     while (true) {
       if (skip == input.length) {
@@ -1255,7 +1304,7 @@ edf
       skip++;
     }
 
-    this.tokens.push({ Name: "Hr" });
+    this.tokens.push({ Name: "Hr", Raw: input.substring(0, skip) });
 
     return skip;
   }
@@ -1513,85 +1562,103 @@ edf
     return 0;
   }
 
-  private lheading(input: string): number | undefined {
-    return 0;
+  private lheading(input: string): { Skip: number, Level: number } | undefined {
+    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+    if (numberOfSpaces >= TabSize || skip == input.length) {
+      return undefined;
+    }
+
+    let bullet = input[skip];
+    if (bullet != '=' && bullet != '-') {
+      return undefined;
+    }
+
+    let count = 1;
+    while (skip++ < input.length) {
+      if (input[skip] == '\n') {
+        break;
+      } else if (input[skip] != bullet) {
+        return undefined;
+      }
+      count++;
+    }
+
+    if (count < 3) {
+      return undefined;
+    }
+
+    return { Skip: skip, Level: bullet == '=' ? 1 : 2 };
   }
 
   private paragraph(input: string): number {
-    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
-    if (numberOfSpaces >= TabSize || skip == input.length) {
-      return 0;
-    }
-
-    let token = this.getLastToken(this.tokens);
-    if (token?.Name == "Paragraph") {
-      // Check if this line should be combined with the previous line to form a Setext-style heading.
-      token = this.getLastToken(this.stack);
-      if (token?.Name == "BlockQuote") {
-
-      } else if (token?.Name == "List") {
-
+    let token = this.getToken(this.tokens);
+    if (token?.Name != "Paragraph" || token.Completed) {
+      let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+      if (numberOfSpaces >= TabSize || skip == input.length) {
+        return 0;
       }
-    } else {
 
-    }
-
-    let end = this.lheading(input);
-    if (end == undefined) {
-      // Not a setext-style Heading
-      // Accept the current line.
       while (true) {
         if (skip < input.length && input[skip++] == '\n') {
           break;
         }
       }
 
-      // token = this.getLastToken(this.tokens);
-      // if (token?.Name == "Paragraph" && !token.Completed) {
-      //   token.Raw += input.substring(0, skip);
-      // } else {
-      //   this.tokens.push({
-      //     Name: "Paragraph",
-      //     Raw: input.substring(0, skip),
-      //     Completed: false,
-      //     Children: []
-      //   });
-      // }
+      this.tokens.push({
+        Name: "Paragraph",
+        Raw: input.substring(0, skip),
+        Completed: false,
+        Children: []
+      });
 
+      this.lastToken = "Paragraph";
+      return skip;
     }
 
-    // let token = this.getLastToken(this.stack);
-    // if (token?.Name == "BlockQuote") {
+    // Check if this line should be combined with the previous line to form a Setext-style heading.
+    let prefix = this.lheading(input);
+    if (prefix == undefined) {
+      // Not a setext-style heading.
+      // Accept the current line.
+      let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+      if (numberOfSpaces >= TabSize || skip == input.length) {
+        return 0;
+      }
 
-    // }
+      while (true) {
+        if (skip < input.length && input[skip++] == '\n') {
+          break;
+        }
+      }
 
-    // // Accept the current line.
-    // while (true) {
-    //   if (skip < input.length && input[skip++] == '\n') {
-    //     break;
-    //   }
-    // }
-
-    // token = this.getLastToken(this.tokens);
-    // if (token?.Name == "Paragraph" && !token.Completed) {
-    //   token.Raw += input.substring(0, skip);
-    // } else {
-    //   this.tokens.push({
-    //     Name: "Paragraph",
-    //     Raw: input.substring(0, skip),
-    //     Completed: false,
-    //     Children: []
-    //   });
-    // }
-
-    return skip;
+      token.Raw += input.substring(0, skip);
+      return skip;
+    } else {
+      // It is a setext-style heading.
+      // If we are inside a block quote, we need to check whether the previous token is the block quote marker or not.
+      // token = this.getLastToken(this.stack);
+      if ((this.getToken(this.stack))?.Name == "BlockQuote" && this.lastToken != "BlockQuote") {
+        token.Raw += input.substring(0, prefix.Skip);
+      } else {
+        token = this.tokens.pop() as paragraph;
+        this.tokens.push({
+          Name: "Heading",
+          Raw: token.Raw,
+          Text: token.Raw,
+          Level: prefix.Level,
+          Children: [],
+        });
+        this.lastToken = "Heading";
+      }
+      return prefix.Skip;
+    }
   }
 
   private lastToken: string = "";
   private stack: token[] = [];
   private root: token[] = [];
   private tokens: token[] = this.root;
-}
+};
 
 let p = new Parser();
 p.Main();
