@@ -1,7 +1,5 @@
 // export type Token = rawToken | textToken | headingToken | codeToken | blockQuoteToken | listToken | listItemToken;
 
-import { FencedCode } from "../trash/240628/markdown/node";
-
 // type rawToken = {
 //   Raw: string;
 // };
@@ -915,7 +913,12 @@ import { FencedCode } from "../trash/240628/markdown/node";
 
 const TabSize = 4;
 
-type token = heading | hr | code | blockQuote | list | listItem | paragraph;
+type token = blank | heading | hr | code | blockQuote | list | listItem | paragraph;
+
+type blank = {
+  Name: "Blank",
+  Raw: string,
+};
 
 type heading = {
   Name: "Heading",
@@ -962,90 +965,129 @@ type listItem = {
 
 class Parser {
   Main() {
+    /*     let input = `
+    # Heading
+
+
+
+    ** *
+    \`\`\` c
+    printf("Hello World!");
+    \`\`\`
+
+    ~~~ c
+    printf("Hello World!");
+    ~~~
+
+        printf("Hello World!");
+        return 0;
+
+          printf("Hello World");
+    ***
+
+    > > # Heading1
+    ***
+
+    >> ***
+    ***
+
+    >> ***
+        printf("Hello World!");
+
+    >> ***
+    >> ***
+
+    > ***
+    >> ***
+
+    > ***
+    >> ***
+    > ***
+
+    > ***
+    >> ***
+    > ***
+    >>> ---
+
+    > # Heading1
+    >
+    abc
+
+    > abc
+    def
+
+    > abc
+    ===
+
+    > abc
+    > ===
+
+    > def
+    > ---
+
+    > abc
+    >> ===
+
+    edf
+    ===
+
+    def
+
+    ===
+
+    paragraph
+    # Heading
+
+    >     asdasd
+    >     asdasd
+    >     asdasd
+
+    >     asdasd
+         asdasd
+         asdasd
+    `;
+     */
     let input = `
-# Heading
-
-
-
-** *
-\`\`\` c
-printf("Hello World!");
-\`\`\`
-
-~~~ c
-printf("Hello World!");
-~~~
-
-    printf("Hello World!");
-    return 0;
-
-      printf("Hello World");
-***
-
-> > # Heading1
-***
-
->> ***
-***
-
->> ***
-    printf("Hello World!");
-
->> ***
->> ***
-
-> ***
->> ***
-
-> ***
->> ***
-> ***
-
-> ***
->> ***
-> ***
->>> ---
-
 > # Heading1
 >
-abc
+aaa
 
-> abc
-def
+> bbb
+ccc
 
-> abc
+> ddd
 ===
 
-> abc
+> eee
 > ===
 
-> def
+> fff
 > ---
 
-> abc
+> ggg
 >> ===
 
-edf
+hhh
 ===
 
-def
+iii
 
 ===
 
 paragraph
 # Heading
+`
 
->     asdasd
->     asdasd
->     asdasd
+    console.time('myFunctionExecution');
 
->     asdasd
-     asdasd
-     asdasd
-`;
+    for (let i = 0; i < 1000000; i++) {
+      this.Parse(input);
+      this.root = [];
+      this.tokens = [];
+      this.blocks = [];
+    }
 
-    this.Parse(input);
-
+    console.timeEnd('myFunctionExecution');
     console.dir(this.root, { depth: Infinity });
   }
 
@@ -1056,37 +1098,32 @@ paragraph
 
       if ((skip = this.blank(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "Blank";
         continue;
       }
 
       if ((skip = this.hr(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "Hr";
         continue;
       }
 
       if ((skip = this.heading(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "Heading";
         continue;
       }
 
       if ((skip = this.fencedCode(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "FencedCode";
         continue;
       }
 
       if ((skip = this.indentedCode(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "IndentedCode";
         continue;
       }
 
       if ((skip = this.blockQuote(input)) > 0) {
         input = input.substring(skip);
-        this.lastToken = "BlockQuote";
+        this.insideQuote = true;
         continue;
       }
 
@@ -1097,8 +1134,8 @@ paragraph
     }
 
     this.postAction(input);
-    if (this.lastToken == "Paragraph") {
-      let token = this.getToken(this.tokens) as paragraph;
+    let token = this.getToken(this.tokens);
+    if (token?.Name == "Paragraph") {
       token.Completed = true;
     }
   }
@@ -1109,39 +1146,35 @@ paragraph
       return;
     }
 
-    if (this.lastToken != "Paragraph") {
-      let t = this.getToken(this.tokens, -2);
-      if (t?.Name == "Paragraph") {
-        t.Completed = true;
+    if (token.Name != "Paragraph") {
+      let previousToken = this.getToken(this.tokens, -2);
+      if (previousToken?.Name == "Paragraph") {
+        previousToken.Completed = true;
       }
     }
 
-    if (this.lastToken == "FencedCode" || this.lastToken == "IntendedCode") {
-      if ((this.getToken(this.stack)?.Name == "BlockQuote" && this.blockQuotePrefix(input) == undefined)) {
-        (token as code).Completed = true
+    if (token.Name == "FencedCode" || token.Name == "IndentedCode") {
+      if ((this.getToken(this.blocks)?.Name == "BlockQuote" && this.blockQuotePrefix(input) == undefined)) {
+        token.Completed = true;
       }
     }
 
-    if (this.getToken(this.stack)?.Name == "BlockQuote" &&
-      (token as paragraph).Completed ||
-      (this.lastToken != "Paragraph" && this.blockQuotePrefix(input) == undefined)) {
-      // The input could be like:
-      // > # Heading1
-      // *** (or whatever)
-      // In this scenario, it indicates that the block quote is completed.
-      while (this.stack.length > 0) {
-        if (this.getToken(this.stack)?.Name != "BlockQuote") {
+    if (this.getToken(this.blocks)?.Name == "BlockQuote" &&
+      (token.Name == "Paragraph" && token.Completed) ||
+      (token.Name == "Blank") ||
+      (token.Name != "Paragraph" && this.blockQuotePrefix(input) == undefined)) {
+      while (this.blocks.length > 0) {
+        if (this.getToken(this.blocks)?.Name != "BlockQuote") {
           break;
         }
-        this.stack.pop();
+        this.blocks.pop();
       }
       if (token.Name == "Paragraph") {
         token.Completed = true;
       }
       this.tokens = this.root;
+      this.insideQuote = false;
     }
-
-    this.lastToken = "";
   }
 
   private getToken(tokens: token[], index: number = -1): token | undefined {
@@ -1172,6 +1205,8 @@ paragraph
 
   private blank(input: string): number {
     let skip = 0;
+    let raw = "";
+
     while (input.length > 0) {
       let { Skip: offset, NumberOfSpaces: count } = this.skipLeaddingWhiteSpace(input);
       if (count < input.length && input[offset] != '\n') {
@@ -1181,37 +1216,18 @@ paragraph
         offset++;
       }
       skip += offset;
+      raw += input.substring(0, offset);
       input = input.substring(offset);
     }
 
-    return skip;
-  }
-
-  private blankPostAction(input: string) {
-    if (this.getToken(this.stack)?.Name == "BlockQuote") {
-      if (this.blockQuotePrefix(input) == undefined) {
-        // The input could be like:
-        // >
-        // *** (or whatever)
-        // In this scenario, it indicates that the block quote is completed.
-        while (this.stack.length > 0) {
-          if (this.getToken(this.stack)?.Name != "BlockQuote") {
-            break;
-          }
-          this.stack.pop();
-          this.tokens = this.root;
-        }
-      } else {
-        // >
-        // > other paragraph
-        // In this scenario, it indicates that the paragraph is completed.
-        if (this.getToken(this.tokens)?.Name == "Paragraph") {
-
-        }
-      }
-    } else if (this.getToken(this.tokens)?.Name == "Paragraph") {
+    if (skip != 0) {
+      this.tokens.push({
+        Name: "Blank",
+        Raw: raw,
+      })
 
     }
+    return skip;
   }
 
   private headingPrefix(input: string): { Skip: number, Level: number } | undefined {
@@ -1329,102 +1345,105 @@ paragraph
   }
 
   private fencedCode(input: string): number {
-    let prefix = this.fencedCodePrefix(input);
-    if (prefix == undefined) {
-      return 0;
-    }
+    // TODO: Need to refact the code.
+    return 0;
+    // let prefix = this.fencedCodePrefix(input);
+    // if (prefix == undefined) {
+    //   return 0;
+    // }
 
-    let skip = prefix.Skip;
-    if (skip == input.length) {
-      // Here is a open tag, but don't follow a close tag.
-      this.tokens.push({
-        Name: "FencedCode",
-        Raw: input.substring(0, skip),
-        Text: "",
-        Language: ""
-      });
-      return skip;
-    }
+    // let skip = prefix.Skip;
+    // if (skip == input.length) {
+    //   // Here is a open tag, but don't follow a close tag.
+    //   this.tokens.push({
+    //     Name: "FencedCode",
+    //     Raw: input.substring(0, skip),
+    //     Text: "",
+    //     Language: ""
+    //   });
+    //   return skip;
+    // }
 
-    // Verify if there is a designated language.
-    // Remove the white space following open tag.
-    while (input[skip] == ' ' || input[skip] == '\t') {
-      skip++;
-    }
-    let language = "";
-    if (input[skip] != '\n') {
-      // There is a specified language in the fenen code block.
-      let start = skip;
-      while (skip < input.length && input[skip] != '\n') {
-        skip++;
-      }
-      let trim = skip;
-      while (trim > start) {
-        let c = input[trim - 1];
-        if (c != ' ' && c != '\t') {
-          break;
-        }
-        trim--;
-      }
-      language = input.substring(start, trim);
-    }
+    // // Verify if there is a designated language.
+    // // Remove the white space following open tag.
+    // while (input[skip] == ' ' || input[skip] == '\t') {
+    //   skip++;
+    // }
+    // let language = "";
+    // if (input[skip] != '\n') {
+    //   // There is a specified language in the fenen code block.
+    //   let start = skip;
+    //   while (skip < input.length && input[skip] != '\n') {
+    //     skip++;
+    //   }
+    //   let trim = skip;
+    //   while (trim > start) {
+    //     let c = input[trim - 1];
+    //     if (c != ' ' && c != '\t') {
+    //       break;
+    //     }
+    //     trim--;
+    //   }
+    //   language = input.substring(start, trim);
+    // }
 
-    // Skip the current line feed if there are some characters following it.
-    if (skip < input.length) {
-      skip++;
-    }
+    // // Skip the current line feed if there are some characters following it.
+    // if (skip < input.length) {
+    //   skip++;
+    // }
 
-    // Skip the current line feed if there are some characters following it.
-    let text = "";
-    let raw = input.substring(0, skip);
+    // // Skip the current line feed if there are some characters following it.
+    // let text = "";
+    // let raw = input.substring(0, skip);
 
-    // Don't have closing tag.
-    if (skip == input.length) {
-      this.tokens.push({
-        Name: "FencedCode",
-        Raw: raw,
-        Text: text,
-        Language: language
-      });
-      return skip;
-    }
+    // // Don't have closing tag.
+    // if (skip == input.length) {
+    //   this.tokens.push({
+    //     Name: "FencedCode",
+    //     Raw: raw,
+    //     Text: text,
+    //     Completed: false,
+    //     Language: language,
+    //   });
+    //   return skip;
+    // }
 
-    input = input.substring(skip);
-    let lengthOfOpeningTag = prefix.Length;
-    let bullet = prefix.Bullet;
+    // input = input.substring(skip);
+    // let lengthOfOpeningTag = prefix.Length;
+    // let bullet = prefix.Bullet;
 
-    // Scan the following lines, find the closing tag.
-    while (input.length) {
-      prefix = this.fencedCodePrefix(input);
-      if (prefix != undefined) {
-        if (prefix.Length == lengthOfOpeningTag && prefix.Bullet == bullet) {
-          raw += input.substring(0, prefix.Skip);
-          this.tokens.push({
-            Name: "FencedCode",
-            Raw: raw,
-            Text: text,
-            Language: language
-          });
-          return raw.length;
-        }
-      }
+    // // Scan the following lines, find the closing tag.
+    // while (input.length) {
+    //   prefix = this.fencedCodePrefix(input);
+    //   if (prefix != undefined) {
+    //     if (prefix.Length == lengthOfOpeningTag && prefix.Bullet == bullet) {
+    //       raw += input.substring(0, prefix.Skip);
+    //       this.tokens.push({
+    //         Name: "FencedCode",
+    //         Raw: raw,
+    //         Text: text,
+    //         Language: language
+    //       });
+    //       return raw.length;
+    //     }
+    //   }
 
-      while (skip < input.length && input[skip++] != '\n');
-      let line = input.substring(0, skip);
-      text += line;
-      raw += line;
-      input = input.substring(skip);
-    }
+    //   while (skip < input.length && input[skip++] != '\n');
+    //   let line = input.substring(0, skip);
+    //   text += line;
+    //   raw += line;
+    //   input = input.substring(skip);
+    // }
 
-    // Don't have closing tag.
-    this.tokens.push({
-      Name: "FencedCode",
-      Raw: raw,
-      Text: text,
-      Language: language
-    });
+    // // Don't have closing tag.
+    // this.tokens.push({
+    //   Name: "FencedCode",
+    //   Raw: raw,
+    //   Text: text,
+    //   Language: language
+    // });
 
-    return raw.length;
+    // return raw.length;
   }
 
   private indentedCodePrefix(input: string): { Skip: number, NumbserOfSpace: number } | undefined {
@@ -1437,51 +1456,53 @@ paragraph
   }
 
   private indentedCode(input: string): number {
-    let prefix = this.indentedCodePrefix(input);
-    if (prefix == undefined) {
-      return 0;
-    }
+    // TODO: Need to refactor the code.
+    return 0;
+    // let prefix = this.indentedCodePrefix(input);
+    // if (prefix == undefined) {
+    //   return 0;
+    // }
 
-    let text = "";
-    let raw = "";
-    let start = TabSize, end = prefix.Skip;
+    // let text = "";
+    // let raw = "";
+    // let start = TabSize, end = prefix.Skip;
 
-    while (true) {
-      // find the end of current line.
-      while (end < input.length && input[end] != '\n') {
-        end++;
-      }
-      if (end < input.length) {
-        end++;
-      }
-      text += input.substring(start, end);
-      raw += input.substring(0, end);
-      if (end == input.length) {
-        break;
-      }
+    // while (true) {
+    //   // find the end of current line.
+    //   while (end < input.length && input[end] != '\n') {
+    //     end++;
+    //   }
+    //   if (end < input.length) {
+    //     end++;
+    //   }
+    //   text += input.substring(start, end);
+    //   raw += input.substring(0, end);
+    //   if (end == input.length) {
+    //     break;
+    //   }
 
-      input = input.substring(end);
-      end = this.blank(input);
-      if (end > 0) {
-        text += input.substring(0, end);
-        raw += input.substring(0, end);
-        input = input.substring(end);
-      }
+    //   input = input.substring(end);
+    //   end = this.blank(input);
+    //   if (end > 0) {
+    //     text += input.substring(0, end);
+    //     raw += input.substring(0, end);
+    //     input = input.substring(end);
+    //   }
 
-      prefix = this.indentedCodePrefix(input);
-      if (prefix == undefined) {
-        break;
-      }
-      end = prefix.Skip;
-    }
+    //   prefix = this.indentedCodePrefix(input);
+    //   if (prefix == undefined) {
+    //     break;
+    //   }
+    //   end = prefix.Skip;
+    // }
 
-    this.tokens.push({
-      Name: "IndentedCode",
-      Raw: raw,
-      Text: text,
-      Language: "",
-    });
-    return raw.length;
+    // this.tokens.push({
+    //   Name: "IndentedCode",
+    //   Raw: raw,
+    //   Text: text,
+    //   Language: "",
+    // });
+    // return raw.length;
   }
 
   private def(input: string): number {
@@ -1518,11 +1539,11 @@ paragraph
     }
 
     let end = prefix;
-    let bp = this.stack.length;
+    let bp = this.blocks.length;
 
     // Skip the exited block quote markers.
     while (true) {
-      if (bp == 0 || this.stack[--bp].Name != 'BlockQuote') {
+      if (bp == 0 || this.blocks[--bp].Name != 'BlockQuote') {
         break;
       }
       input = input.substring(prefix);
@@ -1542,7 +1563,7 @@ paragraph
         };
 
         this.tokens.push(qb);
-        this.stack.push(qb);
+        this.blocks.push(qb);
         this.tokens = qb.Children;
 
         input = input.substring(prefix);
@@ -1583,6 +1604,10 @@ paragraph
       count++;
     }
 
+    if (skip < input.length) {
+      skip++;
+    }
+
     if (count < 3) {
       return undefined;
     }
@@ -1611,7 +1636,6 @@ paragraph
         Children: []
       });
 
-      this.lastToken = "Paragraph";
       return skip;
     }
 
@@ -1637,7 +1661,7 @@ paragraph
       // It is a setext-style heading.
       // If we are inside a block quote, we need to check whether the previous token is the block quote marker or not.
       // token = this.getLastToken(this.stack);
-      if ((this.getToken(this.stack))?.Name == "BlockQuote" && this.lastToken != "BlockQuote") {
+      if ((this.getToken(this.blocks))?.Name == "BlockQuote" && !this.insideQuote) {
         token.Raw += input.substring(0, prefix.Skip);
       } else {
         token = this.tokens.pop() as paragraph;
@@ -1648,14 +1672,14 @@ paragraph
           Level: prefix.Level,
           Children: [],
         });
-        this.lastToken = "Heading";
       }
       return prefix.Skip;
     }
   }
 
-  private lastToken: string = "";
-  private stack: token[] = [];
+  private insideQuote: boolean = false;
+  private insideList: boolean = false;
+  private blocks: token[] = [];
   private root: token[] = [];
   private tokens: token[] = this.root;
 };
