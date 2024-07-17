@@ -1,6 +1,6 @@
 const TabSize = 4;
 
-type token = blank | heading | hr | code | blockQuote | list | listItem | paragraph;
+type token = blank | heading | hr | fencedCode | indentedCode | blockQuote | list | listItem | paragraph;
 
 type blank = {
   Name: "Blank",
@@ -24,7 +24,6 @@ type indentedCode = {
   Name: "IndentedCode",
   Raw: string,
   Text: string,
-  Completed: boolean,
 };
 
 type fencedCode = {
@@ -34,16 +33,7 @@ type fencedCode = {
   Bullet: string,
   Length: number,
   Language: string, // TODO: It should use a map to list all supports languages, Or not a string.
-  Completed: boolean,
 }
-
-type code = {
-  Name: "FencedCode" | "IndentedCode",
-  Raw: string,
-  Text: string,
-  Language: string,
-  Completed: boolean,
-};
 
 type blockQuote = {
   Name: "BlockQuote",
@@ -69,117 +59,117 @@ type listItem = {
 
 class Parser {
   Main() {
-    /*     let input = `
-    # Heading
-
-
-
-    ** *
-    \`\`\` c
-    printf("Hello World!");
-    \`\`\`
-
-    ~~~ c
-    printf("Hello World!");
-    ~~~
-
-        printf("Hello World!");
-        return 0;
-
-          printf("Hello World");
-    ***
-
-    > > # Heading1
-    ***
-
-    >> ***
-    ***
-
-    >> ***
-        printf("Hello World!");
-
-    >> ***
-    >> ***
-
-    > ***
-    >> ***
-
-    > ***
-    >> ***
-    > ***
-
-    > ***
-    >> ***
-    > ***
-    >>> ---
-
+    /*
     > # Heading1
     >
-    abc
+    aaa
 
-    > abc
-    def
+    > bbb
+    ccc
 
-    > abc
+    > ddd
     ===
 
-    > abc
+    > eee
     > ===
 
-    > def
+    > fff
     > ---
 
-    > abc
+    > ggg
     >> ===
 
-    edf
+    hhh
     ===
 
-    def
+    iii
 
     ===
 
     paragraph
     # Heading
+    */
 
-    >     asdasd
-    >     asdasd
-    >     asdasd
-
-    >     asdasd
-         asdasd
-         asdasd
-    `;
-     */
     let input = `
+# Heading
+
+
+
+** *
+\`\`\` c
+printf("Hello World!");
+\`\`\`
+
+~~~ c
+printf("Hello World!");
+~~~
+
+    printf("Hello World!");
+    return 0;
+
+      printf("Hello World");
+***
+
+> > # Heading1
+***
+
+>> ***
+***
+
+>> ***
+    printf("Hello World!");
+
+>> ***
+>> ***
+
+> ***
+>> ***
+
+> ***
+>> ***
+> ***
+
+> ***
+>> ***
+> ***
+>>> ---
+
 > # Heading1
 >
-aaa
+abc
 
-> bbb
-ccc
+> abc
+def
 
-> ddd
+> abc
 ===
 
-> eee
+> abc
 > ===
 
-> fff
+> def
 > ---
 
-> ggg
+> abc
 >> ===
 
-hhh
+edf
 ===
 
-iii
+def
 
 ===
 
 paragraph
 # Heading
+
+>     asdasd
+>     asdasd
+>     asdasd
+
+>     asdasd
+      asdasd
+      asdasd
 
 > ~~~ c
 > printf("Hello World!");
@@ -192,7 +182,14 @@ paragraph
 > ~~~ c
 printf("Hello World!");
 ~~~
-`
+
+>     printf("Hello World!");
+>     return
+
+>     print("Hello World!");
+      return
+    `
+
     this.Parse(input);
     console.dir(this.root, { depth: Infinity });
   }
@@ -202,31 +199,13 @@ printf("Hello World!");
     while (input.length > 0) {
       this.postAction(input);
 
-      if (!this.insideFenced && (skip = this.blank(input)) > 0) {
-        input = input.substring(skip);
-        this.insideQuote = false;
-        continue;
-      }
-
-      if (!this.insideFenced && (skip = this.hr(input)) > 0) {
-        input = input.substring(skip);
-        this.insideQuote = false;
-        continue;
-      }
-
-      if (!this.insideFenced && (skip = this.heading(input)) > 0) {
-        input = input.substring(skip);
-        this.insideQuote = false;
-        continue;
-      }
-
-      if ((skip = this.fencedCode(input)) > 0) {
-        input = input.substring(skip);
-        this.insideQuote = false;
-        continue;
-      }
-
       if (!this.insideFenced && (skip = this.indentedCode(input)) > 0) {
+        input = input.substring(skip);
+        this.insideQuote = false;
+        continue;
+      }
+
+      if (!this.insideIndented && (skip = this.fencedCode(input)) > 0) {
         input = input.substring(skip);
         this.insideQuote = false;
         continue;
@@ -238,10 +217,30 @@ printf("Hello World!");
         continue;
       }
 
-      if (!this.insideFenced && (skip = this.paragraph(input)) > 0) {
-        input = input.substring(skip);
-        this.insideQuote = false;
-        continue;
+      if (!(this.insideFenced && this.insideIndented)) {
+        if ((skip = this.blank(input)) > 0) {
+          input = input.substring(skip);
+          this.insideQuote = false;
+          continue;
+        }
+
+        if ((skip = this.hr(input)) > 0) {
+          input = input.substring(skip);
+          this.insideQuote = false;
+          continue;
+        }
+
+        if ((skip = this.heading(input)) > 0) {
+          input = input.substring(skip);
+          this.insideQuote = false;
+          continue;
+        }
+
+        if ((skip = this.paragraph(input)) > 0) {
+          input = input.substring(skip);
+          this.insideQuote = false;
+          continue;
+        }
       }
     }
 
@@ -255,7 +254,7 @@ printf("Hello World!");
       return;
     }
 
-    if (token.Name == "Paragraph" || token.Name == "FencedCode" || token.Name == "IndentedCode") {
+    if (token.Name == "Paragraph") {
       token.Completed = true;
     }
   }
@@ -271,28 +270,41 @@ printf("Hello World!");
       previousToken.Completed = true;
     }
 
-    // TODO: Test required.
-    if (token.Name == "IndentedCode" && this.indentedCodePrefix(input) == undefined) {
-      token.Completed = true;
-    }
-
-    if (this.getToken(this.blocks)?.Name == "BlockQuote" &&
-      (!this.insideQuote && token.Name == "Blank") ||
-      (token.Name != "Paragraph" && this.blockQuotePrefix(input) == undefined)) {
-      while (this.blocks.length > 0) {
-        if (this.getToken(this.blocks)?.Name != "BlockQuote") {
-          break;
+    if (this.getToken(this.blocks)?.Name == "BlockQuote" && !this.insideQuote) {
+      if ((token.Name == "Blank" || (token.Name != "Paragraph" && this.blockQuotePrefix(input) == undefined))) {
+        while (this.blocks.length > 0) {
+          if (this.getToken(this.blocks)?.Name != "BlockQuote") {
+            break;
+          }
+          this.blocks.pop();
         }
-        this.blocks.pop();
+        if (token.Name == "IndentedCode") {
+          this.insideIndented = false;
+        } else if (token.Name == "FencedCode") {
+          this.insideFenced = false;
+        }
+        this.tokens = this.root;
+        this.insideQuote = false;
       }
-      if (token.Name == "IndentedCode") {
-        token.Completed = true;
-      } else if (token.Name == "FencedCode") {
-        token.Completed = true;
+
+      // Check whether we are in a block quote. If there is a fenced block, close it.
+      // It looks like:
+      // > ``` c
+      // > printf("Hello World!");
+      // return;  // This line will be parsed as a paragraph token.
+      // ```
+      if (this.insideFenced && this.blockQuotePrefix(input) == undefined) {
         this.insideFenced = false;
       }
-      this.tokens = this.root;
-      this.insideQuote = false;
+
+      if (this.insideIndented && this.blockQuotePrefix(input) == undefined) {
+        this.insideIndented = false;
+      }
+    }
+
+    if (this.getToken(this.blocks)?.Name != "BlockQuote" &&
+      this.insideIndented && this.indentedCodePrefix(input) == undefined) {
+      this.insideIndented = false;
     }
   }
 
@@ -464,7 +476,11 @@ printf("Hello World!");
   }
 
   private fencedCode(input: string): number {
-    // TODO: Need to refactor the code.
+    // If we are processing a block quote, ensure that we are indeed inside a block quote.
+    if (this.getToken(this.blocks)?.Name == "BlockQuote" && !this.insideQuote) {
+      return 0;
+    }
+
     let skip = 0;
     if (this.insideFenced) {
       let token = this.getToken(this.tokens) as fencedCode;
@@ -473,8 +489,9 @@ printf("Hello World!");
       let prefix = this.fencedCodePrefix(input);
       if (prefix != undefined) {
         if (prefix.Bullet == token.Bullet && prefix.Bullet >= token.Bullet) {
+          prefix.Skip++;
           token.Raw += input.substring(0, prefix.Skip);
-          token.Completed = true;
+          this.insideFenced = false;
           return prefix.Skip;
         }
       }
@@ -502,13 +519,13 @@ printf("Hello World!");
       let language = "";
       if (input[skip] != '\n') {
         let start = skip;
-        while (skip < input.length && input[skip] != '\n') {
-          skip++;
-        }
+        while (skip < input.length && input[skip++] != '\n')
+          ;
+
         let trim = skip;
         while (trim > start) {
           let c = input[trim - 1];
-          if (c != ' ' && c != '\t') {
+          if (c != ' ' && c != '\t' && c != '\n') {
             break;
           }
           trim--;
@@ -523,7 +540,6 @@ printf("Hello World!");
         Bullet: prefix.Bullet,
         Length: prefix.Length,
         Language: language,
-        Completed: false,
       }
 
       this.tokens.push(fencedCode);
@@ -542,53 +558,47 @@ printf("Hello World!");
   }
 
   private indentedCode(input: string): number {
-    // TODO: Need to refactor the code.
-    return 0;
-    // let prefix = this.indentedCodePrefix(input);
-    // if (prefix == undefined) {
-    //   return 0;
-    // }
+    // If we are processing a block quote, ensure that we are indeed inside a block quote.
+    if (this.getToken(this.blocks)?.Name == "BlockQuote" && !this.insideQuote) {
+      return 0;
+    }
 
-    // let text = "";
-    // let raw = "";
-    // let start = TabSize, end = prefix.Skip;
+    let skip = 0;
+    let prefix = this.indentedCodePrefix(input);
+    if (prefix == undefined) {
+      return 0;
+    }
 
-    // while (true) {
-    //   // find the end of current line.
-    //   while (end < input.length && input[end] != '\n') {
-    //     end++;
-    //   }
-    //   if (end < input.length) {
-    //     end++;
-    //   }
-    //   text += input.substring(start, end);
-    //   raw += input.substring(0, end);
-    //   if (end == input.length) {
-    //     break;
-    //   }
+    let raw = "";
+    let text = "";
+    let start = TabSize;
 
-    //   input = input.substring(end);
-    //   end = this.blank(input);
-    //   if (end > 0) {
-    //     text += input.substring(0, end);
-    //     raw += input.substring(0, end);
-    //     input = input.substring(end);
-    //   }
+    skip = prefix.Skip;
+    while (skip < input.length && input[skip] != '\n') {
+      skip++;
+    }
+    if (skip < input.length) {
+      skip++;
+    }
+    text += input.substring(start, skip);
+    raw += input.substring(0, skip);
 
-    //   prefix = this.indentedCodePrefix(input);
-    //   if (prefix == undefined) {
-    //     break;
-    //   }
-    //   end = prefix.Skip;
-    // }
+    if (this.insideIndented) {
+      let token = this.getToken(this.tokens) as indentedCode;
+      token.Raw += raw;
+      token.Text += text;
+    } else {
+      let indentedCode: indentedCode = {
+        Name: "IndentedCode",
+        Raw: raw,
+        Text: text,
+      }
 
-    // this.tokens.push({
-    //   Name: "IndentedCode",
-    //   Raw: raw,
-    //   Text: text,
-    //   Language: "",
-    // });
-    // return raw.length;
+      this.tokens.push(indentedCode);
+      this.insideIndented = true;
+    }
+
+    return skip;
   }
 
   private def(input: string): number {
@@ -642,14 +652,14 @@ printf("Hello World!");
 
     // Add the remaining block quote markers.
     if (prefix != undefined) {
-      if (bp != 0) {
+      if (bp == 0) {
         // Close the previous token before adding new block quote token.
         let token = this.getToken(this.tokens);
-        if (token?.Name == "Paragraph" ||
-          token?.Name == "IndentedCode" ||
-          token?.Name == "FencedCode") {
+        if (token?.Name == "Paragraph") {
           token.Completed = true;
         }
+        this.insideFenced = false;
+        this.insideIndented = false;
       }
 
       while (true) {
@@ -774,6 +784,7 @@ printf("Hello World!");
   }
 
   private insideFenced: boolean = false;
+  private insideIndented: boolean = false;
   private insideQuote: boolean = false;
   private insideList: boolean = false;
   private blocks: token[] = [];
