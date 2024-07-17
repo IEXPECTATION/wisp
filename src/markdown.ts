@@ -232,7 +232,7 @@ printf("Hello World!");
         continue;
       }
 
-      if (!this.insideFenced && (skip = this.blockQuote(input)) > 0) {
+      if ((skip = this.blockQuote(input)) > 0) {
         input = input.substring(skip);
         this.insideQuote = true;
         continue;
@@ -261,20 +261,14 @@ printf("Hello World!");
   }
 
   private postAction(input: string) {
-    if (this.insideQuote) {
-      return;
-    }
-
     let token = this.getToken(this.tokens);
     if (token == undefined) {
       return;
     }
 
-    if (token.Name != "Paragraph") {
-      let previousToken = this.getToken(this.tokens, -2);
-      if (previousToken?.Name == "Paragraph") {
-        previousToken.Completed = true;
-      }
+    let previousToken = this.getToken(this.tokens, -2);
+    if (previousToken?.Name == "Paragraph") {
+      previousToken.Completed = true;
     }
 
     // TODO: Test required.
@@ -283,7 +277,7 @@ printf("Hello World!");
     }
 
     if (this.getToken(this.blocks)?.Name == "BlockQuote" &&
-      (token.Name == "Paragraph" && token.Completed) ||
+      (!this.insideQuote && token.Name == "Blank") ||
       (token.Name != "Paragraph" && this.blockQuotePrefix(input) == undefined)) {
       while (this.blocks.length > 0) {
         if (this.getToken(this.blocks)?.Name != "BlockQuote") {
@@ -291,7 +285,7 @@ printf("Hello World!");
         }
         this.blocks.pop();
       }
-      if (token.Name == "Paragraph" || token.Name == "IndentedCode") {
+      if (token.Name == "IndentedCode") {
         token.Completed = true;
       } else if (token.Name == "FencedCode") {
         token.Completed = true;
@@ -648,6 +642,16 @@ printf("Hello World!");
 
     // Add the remaining block quote markers.
     if (prefix != undefined) {
+      if (bp != 0) {
+        // Close the previous token before adding new block quote token.
+        let token = this.getToken(this.tokens);
+        if (token?.Name == "Paragraph" ||
+          token?.Name == "IndentedCode" ||
+          token?.Name == "FencedCode") {
+          token.Completed = true;
+        }
+      }
+
       while (true) {
         let qb: blockQuote = {
           Name: "BlockQuote",
