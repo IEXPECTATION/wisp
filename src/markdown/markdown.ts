@@ -35,6 +35,13 @@ type fencedCode = {
   Language: string, // TODO: It should use a map to list all supports languages, Or not a string.
 }
 
+type code = {
+  Name: "IndentedCode" | "FencedCode",
+  Raw: string;
+  Text: string;
+  Language: string, // TODO: It should use a map to list all supports languages, Or not a string.
+};
+
 type blockQuote = {
   Name: "BlockQuote",
   Children: token[];
@@ -195,10 +202,34 @@ printf("Hello World!");
   }
 
   Parse(input: string) {
-    let  = 0;
+    let prefix = undefined;
     while (input.length > 0) {
-      if(this.isBlank(input) != undefined) {
-        this.input
+      if ((prefix = this.isBlank(input)) != undefined) {
+        this.blank(input, prefix);
+        input = input.substring(prefix);
+        continue;
+      }
+
+      if ((prefix = this.isHeading(input)) != undefined) {
+        prefix = this.heading(input, prefix.Skip, prefix.Level);
+        input = input.substring(prefix);
+        continue;
+      }
+
+      if ((prefix = this.isHr(input)) != undefined) {
+        this.hr(input, prefix);
+        input = input.substring(prefix);
+        continue;
+      }
+
+      if ((prefix = this.isCode(input)) != undefined) {
+        prefix = this.code(input, prefix.Skip, prefix.Fenced);
+        input = input.substring(prefix);
+        continue;
+      }
+
+      if ((prefix = this.isBlockQuote(input)) != undefined) {
+        preifx = this.blockQuote(input, prefix)
       }
     }
   }
@@ -264,13 +295,8 @@ printf("Hello World!");
     return true;
   }
 
-  private isBlank(input: string): { Skip: number } | undefined {
-    return undefined;
-  }
-
-  private blank(input: string): number {
+  private isBlank(input: string): number | undefined {
     let skip = 0;
-    let raw = "";
 
     while (input.length > 0) {
       let { Skip: offset, NumberOfSpaces: count } = this.skipLeaddingWhiteSpace(input);
@@ -281,18 +307,20 @@ printf("Hello World!");
         offset++;
       }
       skip += offset;
-      raw += input.substring(0, offset);
       input = input.substring(offset);
     }
 
-    if (skip != 0) {
-      this.tokens.push({
-        Name: "Blank",
-        Raw: raw,
-      })
-
+    if (skip > 0) {
+      return skip;
     }
-    return skip;
+    return undefined;
+  }
+
+  private blank(input: string, skip: number) {
+    this.tokens.push({
+      Name: "Blank",
+      Raw: input.substring(skip),
+    });
   }
 
   private isHeading(input: string): { Skip: number, Level: number } | undefined {
@@ -351,14 +379,6 @@ printf("Hello World!");
       return undefined;
     }
 
-    // let token = this.getToken(this.tokens);
-    // if (bullet == '-' && token?.Name == "Paragraph" && !token.Completed) {
-    //   return undefined;
-    // }
-    return skip;
-  }
-
-  private hr(input: string, skip: number, bullet: string) {
     let count = 1;
     while (true) {
       if (skip == input.length) {
@@ -377,158 +397,57 @@ printf("Hello World!");
     }
 
     if (count < 3)
-      return;
+      return undefined;
 
     if (skip < input.length) {
       skip++;
     }
 
+    // let token = this.getToken(this.tokens);
+    // if (bullet == '-' && token?.Name == "Paragraph" && !token.Completed) {
+    //   return undefined;
+    // }
+    return skip;
+  }
+
+  private hr(input: string, skip: number) {
     this.tokens.push({ Name: "Hr", Raw: input.substring(0, skip) });
   }
 
-  private isFencedCode(input: string): { Skip: number, Bullet: string, Length: number } | undefined {
+  private isCode(input: string): {
+    Skip: number,
+    Fenced: {
+      Bullet: string,
+      Length: number,
+    } | undefined
+  } | undefined {
     let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
-    if (numberOfSpaces >= TabSize || skip == input.length) {
-      return undefined;
+    if (skip < input.length && numberOfSpaces >= TabSize) {
+      return { Skip: skip > TabSize ? TabSize : skip, Fenced: undefined };
     }
+
     let bullet = input[skip];
     if (bullet != '`' && bullet != '~') {
       return undefined;
     }
-    numberOfSpaces = 1;
+    let length = 1;
     while (++skip < input.length && input[skip] == bullet) {
-      numberOfSpaces++;
+      length++;
     }
-    if (numberOfSpaces < 3) {
+    if (length < 3) {
       return undefined;
     }
-    return { Skip: skip, Bullet: bullet, Length: numberOfSpaces };
+    return { Skip: skip, Fenced: { Bullet: bullet, Length: length } };
   }
 
-  private fencedCode(input: string): number {
-    // If we are processing a block quote, ensure that we are indeed inside a block quote.
-    if (this.getToken(this.blocks)?.Name == "BlockQuote" && !this.insideQuote) {
-      return 0;
-    }
-
-    let skip = 0;
-    if (this.insideFenced) {
-      let token = this.getToken(this.tokens) as fencedCode;
-
-      // If we are already processing a fenced code, find the ending characters.
-      let prefix = this.isFencedCode(input);
-      if (prefix != undefined) {
-        if (prefix.Bullet == token.Bullet && prefix.Bullet >= token.Bullet) {
-          prefix.Skip++;
-          token.Raw += input.substring(0, prefix.Skip);
-          this.insideFenced = false;
-          return prefix.Skip;
-        }
-      }
-
-      // add this line to the token;
-      while (skip < input.length && input[skip++] != '\n')
-        ;
-
-      let line = input.substring(0, skip);
-      token.Raw += line;
-      token.Text += line;
+  private code(input: string, skip: number, fenced: { Bullet: string, Length: number } | undefined): number {
+    if (fenced == undefined) {
+      // 
     } else {
-      let prefix = this.isFencedCode(input);
-      if (prefix == undefined) {
-        return 0;
-      }
 
-      skip = prefix.Skip;
-      // Add the language to token if there is a language specified.
-      // Remove the white space following open tag.
-      while (input[skip] == ' ' || input[skip] == '\t') {
-        skip++;
-      }
-
-      let language = "";
-      if (input[skip] != '\n') {
-        let start = skip;
-        while (skip < input.length && input[skip++] != '\n')
-          ;
-
-        let trim = skip;
-        while (trim > start) {
-          let c = input[trim - 1];
-          if (c != ' ' && c != '\t' && c != '\n') {
-            break;
-          }
-          trim--;
-        }
-        language = input.substring(start, trim);
-      }
-
-      let fencedCode: fencedCode = {
-        Name: "FencedCode",
-        Raw: input.substring(0, skip),
-        Text: "",
-        Bullet: prefix.Bullet,
-        Length: prefix.Length,
-        Language: language,
-      }
-
-      this.tokens.push(fencedCode);
-      this.insideFenced = true;
-    }
-    return skip;
-  }
-
-  private isIndentedCode(input: string): { Skip: number, NumbserOfSpace: number } | undefined {
-    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
-    if (skip < input.length && numberOfSpaces >= TabSize) {
-      return { Skip: skip, NumbserOfSpace: numberOfSpaces };
     }
 
-    return undefined;
-  }
-
-  private indentedCode(input: string): number {
-    // If we are processing a block quote, ensure that we are indeed inside a block quote.
-    if (this.getToken(this.blocks)?.Name == "BlockQuote" && !this.insideQuote) {
-      return 0;
-    }
-
-    let skip = 0;
-    let prefix = this.isIndentedCode(input);
-    if (prefix == undefined) {
-      return 0;
-    }
-
-    let raw = "";
-    let text = "";
-    let start = TabSize;
-
-    skip = prefix.Skip;
-    while (skip < input.length && input[skip] != '\n') {
-      skip++;
-    }
-    if (skip < input.length) {
-      skip++;
-    }
-    text += input.substring(start, skip);
-    raw += input.substring(0, skip);
-
-    if (this.insideIndented) {
-      let token = this.getToken(this.tokens) as indentedCode;
-      token.Raw += raw;
-      token.Text += text;
-    } else {
-      let indentedCode: indentedCode = {
-        Name: "IndentedCode",
-        Raw: raw,
-        Text: text,
-      }
-
-      this.tokens.push(indentedCode);
-      this.insideIndented = true;
-    }
-
-    return skip;
+    return 0;
   }
 
   private def(input: string): number {
@@ -558,60 +477,61 @@ printf("Hello World!");
     return skip;
   }
 
-  private blockQuote(input: string): number {
-    let prefix = this.isBlockQuote(input);
-    if (prefix == undefined) {
-      return 0;
-    }
+  private blockQuote(input: string, skip: number): number {
+    // let prefix = this.isBlockQuote(input);
+    // if (prefix == undefined) {
+    //   return 0;
+    // }
 
-    let end = prefix;
-    let bp = this.blocks.length;
+    // let end = prefix;
+    // let bp = this.blocks.length;
 
-    // Skip the exited block quote markers.
-    while (true) {
-      if (bp == 0 || this.blocks[--bp].Name != 'BlockQuote') {
-        break;
-      }
-      input = input.substring(prefix);
-      prefix = this.isBlockQuote(input);
-      if (prefix == undefined) {
-        break;
-      }
-      end += prefix
-    }
+    // // Skip the exited block quote markers.
+    // while (true) {
+    //   if (bp == 0 || this.blocks[--bp].Name != 'BlockQuote') {
+    //     break;
+    //   }
+    //   input = input.substring(prefix);
+    //   prefix = this.isBlockQuote(input);
+    //   if (prefix == undefined) {
+    //     break;
+    //   }
+    //   end += prefix
+    // }
 
-    // Add the remaining block quote markers.
-    if (prefix != undefined) {
-      if (bp == 0) {
-        // Close the previous token before adding new block quote token.
-        let token = this.getToken(this.tokens);
-        if (token?.Name == "Paragraph") {
-          token.Completed = true;
-        }
-        this.insideFenced = false;
-        this.insideIndented = false;
-      }
+    // // Add the remaining block quote markers.
+    // if (prefix != undefined) {
+    //   if (bp == 0) {
+    //     // Close the previous token before adding new block quote token.
+    //     let token = this.getToken(this.tokens);
+    //     if (token?.Name == "Paragraph") {
+    //       token.Completed = true;
+    //     }
+    //     this.insideFenced = false;
+    //     this.insideIndented = false;
+    //   }
 
-      while (true) {
-        let qb: blockQuote = {
-          Name: "BlockQuote",
-          Children: []
-        };
+    //   while (true) {
+    //     let qb: blockQuote = {
+    //       Name: "BlockQuote",
+    //       Children: []
+    //     };
 
-        this.tokens.push(qb);
-        this.blocks.push(qb);
-        this.tokens = qb.Children;
+    //     this.tokens.push(qb);
+    //     this.blocks.push(qb);
+    //     this.tokens = qb.Children;
 
-        input = input.substring(prefix);
-        prefix = this.isBlockQuote(input);
-        if (prefix == undefined) {
-          break;
-        }
-        end += prefix;
-      }
-    }
+    //     input = input.substring(prefix);
+    //     prefix = this.isBlockQuote(input);
+    //     if (prefix == undefined) {
+    //       break;
+    //     }
+    //     end += prefix;
+    //   }
+    // }
 
-    return end;
+    // return end;
+    return 0;
   }
 
   private isList(input: string): { Skip: number, Ordered: boolean, Bullet: string } | undefined {

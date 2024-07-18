@@ -1,5 +1,5 @@
 import { exit } from "process";
-import { Lexer, Tokenizer } from "../src/markdown";
+import { Lexer, Tokenizer } from "../src/markdown/markdown";
 
 let lex = new Lexer(new Tokenizer());
 
