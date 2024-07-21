@@ -1,6 +1,6 @@
 const TabSize = 4;
 
-type token = blank | heading | hr | code | blockQuote | list | listItem | paragraph;
+type node = blank | heading | hr | code | blockQuote | list | listItem | paragraph;
 
 type blank = {
   Name: "Blank",
@@ -12,26 +12,13 @@ type heading = {
   Raw: string,
   Text: string,
   Level: number,
-  Children: token[],
+  Children: node[],
 };
 
 type hr = {
   Name: "Hr",
   Raw: string,
 };
-
-// type indentedCode = {
-//   Name: "IndentedCode",
-//   Raw: string,
-//   Text: string,
-// };
-
-// type fencedCode = {
-//   Name: "FencedCode",
-//   Raw: string,
-//   Text: string,
-//   Language: string, // TODO: It should use a map to list all supports languages, Or not a string.
-// }
 
 type code = {
   Name: "IndentedCode" | "FencedCode",
@@ -42,13 +29,13 @@ type code = {
 
 type blockQuote = {
   Name: "BlockQuote",
-  Children: token[];
+  Children: node[];
 };
 
 type paragraph = {
   Name: "Paragraph",
   Raw: string,
-  Children: token[];
+  Children: node[];
 };
 
 type list = {
@@ -64,38 +51,7 @@ type listItem = {
 class Markdown {
   Main() {
     /*
-    > # Heading1
-    >
-    aaa
-
-    > bbb
-    ccc
-
-    > ddd
-    ===
-
-    > eee
-    > ===
-
-    > fff
-    > ---
-
-    > ggg
-    >> ===
-
-    hhh
-    ===
-
-    iii
-
-    ===
-
-    paragraph
     # Heading
-    */
-
-    let input = `
-# Heading
 
 
 
@@ -192,7 +148,112 @@ printf("Hello World!");
 
 >     print("Hello World!");
       return
-    `
+ */
+    let input = `
+    # Heading
+
+
+
+** *
+\`\`\` c
+printf("Hello World!");
+\`\`\`
+
+~~~ c
+printf("Hello World!");
+~~~
+
+    printf("Hello World!");
+    return 0;
+
+      printf("Hello World");
+***
+
+> > # Heading1
+***
+
+>> ***
+***
+
+>> ***
+    printf("Hello World!");
+
+>> ***
+>> ***
+
+> ***
+>> ***
+
+> ***
+>> ***
+> ***
+
+> ***
+>> ***
+> ***
+>>> ---
+
+> # Heading1
+>
+abc
+
+> abc
+def
+
+> abc
+===
+
+> abc
+> ===
+
+> def
+> ---
+
+> abc
+>> ===
+
+edf
+===
+
+def
+
+===
+
+paragraph
+# Heading
+
+>     asdasd
+>     asdasd
+>     asdasd
+
+>     asdasd
+      asdasd
+      asdasd
+
+> ~~~ c
+> printf("Hello World!");
+> ~~~
+
+> ~~~ c
+> printf("Hello World!");
+~~~
+
+> ~~~ c
+printf("Hello World!");
+~~~
+
+>     printf("Hello World!");
+>     return
+
+>     print("Hello World!");
+      return
+`
+
+    input = `
+>>> foo
+> bar
+>>baz
+`
 
     this.Parse(input);
     console.dir(this.root, { depth: Infinity });
@@ -227,12 +288,18 @@ printf("Hello World!");
 
       if ((prefix = this.isBlockQuote(input)) != undefined) {
         prefix = this.blockQuote(input, prefix)
+        input = input.substring(prefix);
+        continue;
+      }
+
+      if ((prefix = this.paragraph(input)) != undefined) {
+        input = input.substring(prefix);
         continue;
       }
     }
   }
 
-  private getNode(tokens: token[], index: number = -1): token | undefined {
+  private getNode(tokens: node[], index: number = -1): node | undefined {
     let length = tokens.length;
     if (length == 0) {
       return undefined;
@@ -260,7 +327,7 @@ printf("Hello World!");
 
   private isContinuationText(input: string, indent: number = 0): boolean {
     if (this.isBlank(input) != undefined) {
-      if (indent == 0) {
+      if (indent != 0) {
         return true;
       }
       return false;
@@ -277,14 +344,6 @@ printf("Hello World!");
     if (this.isCode(input) != undefined) {
       return false;
     }
-
-    // if (this.isFencedCode(input) != undefined) {
-    //   return false;
-    // }
-
-    // if (this.isIndentedCode(input) != undefined) {
-    //   return false;
-    // }
 
     if (this.isBlockQuote(input) != undefined) {
       return false;
@@ -321,7 +380,7 @@ printf("Hello World!");
   private blank(input: string, skip: number) {
     this.nodes.push({
       Name: "Blank",
-      Raw: input.substring(skip),
+      Raw: input.substring(0, skip),
     });
   }
 
@@ -442,28 +501,32 @@ printf("Hello World!");
     let text = "";
     let raw = "";
     let prefix = undefined;
+    let start = 0;
 
     if (fenced == undefined) {
+      skip = 0;
+      start = skip;
       while (true) {
-        while (skip < input.length) {
-          if (input[skip++] == '\n') {
+        while (start < input.length) {
+          if (input[start++] == '\n') {
             break;
           }
         }
 
-        raw += input.substring(0, skip);
-        text += input.substring(TabSize, skip);
+        raw += input.substring(0, start);
+        text += input.substring(TabSize, start);
 
-        if (skip == input.length) {
+        skip += start;
+        if (start == input.length) {
           break;
         }
 
-        input = input.substring(skip);
+        input = input.substring(start);
         prefix = this.isCode(input);
         if (prefix == undefined || prefix.Fenced != undefined) {
           break;
         }
-        skip = prefix.Skip;
+        start = prefix.Skip;
       }
       this.nodes.push({
         Name: "IndentedCode",
@@ -475,41 +538,45 @@ printf("Hello World!");
     } else {
       let language = "";
       if (input[skip] != '\n') {
-        let start = skip;
+        start = skip;
         while (skip < input.length && input[skip++] != '\n')
           ;
-        let trim = skip;
-        while (trim > start) {
-          let c = input[trim - 1];
+        let end = skip;
+        while (end > start) {
+          let c = input[end - 1];
           if (c != ' ' && c != '\t' && c != '\n') {
             break;
           }
-          trim--;
+          end--;
         }
-        language = input.substring(start, trim);
+        language = input.substring(start, end);
       }
 
       raw += input.substring(0, skip);
       input = input.substring(skip);
 
       while (true) {
-        while (skip < input.length) {
-          if (input[skip++] == '\n') {
+        start = 0;
+        while (start < input.length) {
+          if (input[start++] == '\n') {
             break;
           }
         }
 
-        raw += input.substring(0, skip);
-        text += input.substring(0, skip);
+        raw += input.substring(0, start);
+        text += input.substring(0, start);
 
-        if (skip == input.length) {
+        skip += start;
+        if (start == input.length) {
           break;
         }
 
-        input = input.substring(skip);
+        input = input.substring(start);
+
         prefix = this.isCode(input);
         if (prefix?.Fenced?.Bullet == fenced.Bullet && prefix.Fenced.Length >= fenced.Length) {
-          raw += input.substring(0, skip);
+          prefix.Skip++;
+          raw += input.substring(0, prefix.Skip);
           skip += prefix.Skip;
           break;
         }
@@ -554,24 +621,55 @@ printf("Hello World!");
 
   private blockQuote(input: string, skip: number): number {
     // Remove the block quote markers.
-    let raw = input.substring(0, skip);
     let lines = "";
+    let raw = input.substring(0, skip);
+    input = input.substring(skip);
 
+    skip = 0;
+    let end = 0;
+    let blankLine = false;
     while (true) {
-      let origin = skip;
-      while (skip < input.length) {
-        if (input[skip++] == '\n') {
+      while (end < input.length) {
+        if (input[end++] == '\n') {
           break;
         }
       }
-      lines += input.substring(origin, skip);
 
-      let prefix = this.isBlockQuote(input);
-      if (prefix == undefined) {
+      skip += end;
+      lines += input.substring(0, end);
+      raw += input.substring(0, end)
+      input = input.substring(end);
+      if (input.length == 0) {
         break;
       }
-      raw += input.substring(0, skip);
-      skip = prefix;
+
+      // Find the end of block quote.
+      /*
+        1. A blank line follows to blockquote.
+          > any
+          (blank line)
+        2. The last line of blockquote is blank line.
+          > (blank line)
+          any
+        3. Any other element.
+          > any
+          any (except contination text)
+      */
+
+      let prefix = this.isBlockQuote(input);
+      if (prefix != undefined) {
+        raw += input.substring(0, prefix);
+        input = input.substring(prefix);
+        if (this.isBlank(input) != undefined) {
+          blankLine = true;
+        } else {
+          blankLine = false;
+        }
+        end += prefix;
+      } else if (blankLine || !this.isContinuationText(input)) {
+        break;
+      }
+      end = 0;
     }
 
     if (lines == "") {
@@ -588,23 +686,28 @@ printf("Hello World!");
 
     this.Parse(lines);
 
-    let node = this.getNode(this.nodes);
-    if (node?.Name == "Paragraph") {  // If the last node is paragraph, we check the next lines are a continuation text.
-      while (true) {
-        if (!this.isContinuationText(input)) {
-          break;
-        }
+    // let node = this.getNode(this.nodes);
+    // while (node?.Name == "BlockQuote") {
+    //   node = this.getNode(node.Children);
+    // }
+    // if (node?.Name == "Paragraph") {  // If the last node is paragraph, we check the next lines are a continuation text.
+    //   let end = 0;
+    //   while (input.length > 0) {
+    //     if (!this.isContinuationText(input)) {
+    //       break;
+    //     }
 
-        let origin = skip;
-        while (skip < input.length) {
-          if (input[skip++] == '\n') {
-            break;
-          }
-        }
-        node.Raw += input.substring(origin, skip);
-        input = input.substring(skip);
-      }
-    }
+    //     end = 0;
+    //     while (end < input.length) {
+    //       if (input[end++] == '\n') {
+    //         break;
+    //       }
+    //     }
+    //     node.Raw += input.substring(0, end);
+    //     input = input.substring(end);
+    //     skip += end;
+    //   }
+    // }
 
     this.nodes = oldNodes;
     return skip;
@@ -653,75 +756,50 @@ printf("Hello World!");
   }
 
   private paragraph(input: string): number {
-    // let token = this.getNode(this.nodes);
-    // if (token?.Name != "Paragraph" || token.Completed) {
-    //   let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
-    //   if (numberOfSpaces >= TabSize || skip == input.length) {
-    //     return 0;
-    //   }
+    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+    if (numberOfSpaces >= TabSize || skip == input.length) {
+      return 0;
+    }
 
-    //   while (skip < input.length) {
-    //     if (input[skip++] == '\n') {
-    //       break;
-    //     }
-    //   }
+    let raw = "";
+    while (input.length > 0) {
+      while (skip < input.length) {
+        if (input[skip++] == '\n') {
+          break;
+        }
+      }
 
-    //   this.nodes.push({
-    //     Name: "Paragraph",
-    //     Raw: input.substring(0, skip),
-    //     Completed: false,
-    //     Children: []
-    //   });
+      raw += input.substring(0, skip);
+      input = input.substring(skip);
 
-    //   return skip;
-    // }
+      let prefix = this.isSetextHeading(input);
+      if (prefix != undefined) {
+        this.nodes.push({
+          Name: "Heading",
+          Raw: raw,
+          Text: raw,
+          Level: prefix.Level,
+          Children: [],
+        });
 
-    // // Check if this line should be combined with the previous line to form a Setext-style heading.
-    // let prefix = this.isSetextHeading(input);
-    // if (prefix == undefined) {
-    //   // Not a setext-style heading.
-    //   // Accept the current line.
-    //   let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
-    //   if (numberOfSpaces >= TabSize || skip == input.length) {
-    //     return 0;
-    //   }
+        return skip + prefix.Skip;
+      }
 
-    //   while (skip < input.length) {
-    //     if (input[skip++] == '\n') {
-    //       break;
-    //     }
-    //   }
+      if (!this.isContinuationText(input)) {
+        break;
+      }
+    }
 
-    //   token.Raw += input.substring(0, skip);
-    //   return skip;
-    // } else {
-    //   // It is a setext-style heading.
-    //   // If we are inside a block quote, we need to check whether the previous token is the block quote marker or not.
-    //   // token = this.getLastToken(this.stack);
-    //   if ((this.getNode(this.blocks))?.Name == "BlockQuote" && !this.insideQuote) {
-    //     token.Raw += input.substring(0, prefix.Skip);
-    //   } else {
-    //     token = this.nodes.pop() as paragraph;
-    //     this.nodes.push({
-    //       Name: "Heading",
-    //       Raw: token.Raw,
-    //       Text: token.Raw,
-    //       Level: prefix.Level,
-    //       Children: [],
-    //     });
-    //   }
-    //   return prefix.Skip;
-    // }
-    return 0;
+    this.nodes.push({
+      Name: "Paragraph",
+      Raw: raw,
+      Children: [],
+    });
+    return skip;
   }
 
-  private insideFenced: boolean = false;
-  private insideIndented: boolean = false;
-  private insideQuote: boolean = false;
-  private insideList: boolean = false;
-  private blocks: token[] = [];
-  private root: token[] = [];
-  private nodes: token[] = this.root;
+  private root: node[] = [];
+  private nodes: node[] = this.root;
 };
 
 let p = new Markdown();
