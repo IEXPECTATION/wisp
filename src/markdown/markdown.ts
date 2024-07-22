@@ -150,7 +150,7 @@ printf("Hello World!");
       return
  */
     let input = `
-    # Heading
+# Heading
 
 
 
@@ -247,12 +247,6 @@ printf("Hello World!");
 
 >     print("Hello World!");
       return
-`
-
-    input = `
->>> foo
-> bar
->>baz
 `
 
     this.Parse(input);
@@ -622,10 +616,10 @@ printf("Hello World!");
   private blockQuote(input: string, skip: number): number {
     // Remove the block quote markers.
     let lines = "";
+    let line = 0;
     let raw = input.substring(0, skip);
     input = input.substring(skip);
 
-    skip = 0;
     let end = 0;
     let blankLine = false;
     while (true) {
@@ -665,10 +659,13 @@ printf("Hello World!");
         } else {
           blankLine = false;
         }
-        end += prefix;
-      } else if (blankLine || !this.isContinuationText(input)) {
+        skip += prefix;
+      } else if (!blankLine && this.isContinuationText(input)) {
+        this.continuationLines.push(line);
+      } else {
         break;
       }
+      line += 1;
       end = 0;
     }
 
@@ -708,7 +705,7 @@ printf("Hello World!");
     //     skip += end;
     //   }
     // }
-
+    this.continuationLines = [];
     this.nodes = oldNodes;
     return skip;
   }
@@ -762,18 +759,21 @@ printf("Hello World!");
     }
 
     let raw = "";
+    let end = skip;
+    let line = 0;
     while (input.length > 0) {
-      while (skip < input.length) {
-        if (input[skip++] == '\n') {
+      while (end < input.length) {
+        if (input[end++] == '\n') {
           break;
         }
       }
 
-      raw += input.substring(0, skip);
-      input = input.substring(skip);
+      raw += input.substring(0, end);
+      input = input.substring(end);
+      skip += end;
 
       let prefix = this.isSetextHeading(input);
-      if (prefix != undefined) {
+      if (!this.continuationLines.includes(line) && prefix != undefined) {
         this.nodes.push({
           Name: "Heading",
           Raw: raw,
@@ -788,6 +788,8 @@ printf("Hello World!");
       if (!this.isContinuationText(input)) {
         break;
       }
+      end = 0;
+      line += 1;
     }
 
     this.nodes.push({
@@ -800,6 +802,7 @@ printf("Hello World!");
 
   private root: node[] = [];
   private nodes: node[] = this.root;
+  private continuationLines: number[] = [];
 };
 
 let p = new Markdown();
