@@ -249,6 +249,11 @@ printf("Hello World!");
       return
 `
 
+    input = `
+>> a
+> # Heading
+c
+`
     this.Parse(input);
     console.dir(this.root, { depth: Infinity });
   }
@@ -613,101 +618,189 @@ printf("Hello World!");
     return skip;
   }
 
-  private blockQuote(input: string, skip: number): number {
-    // Remove the block quote markers.
-    let lines = "";
-    let line = 0;
-    let raw = input.substring(0, skip);
-    input = input.substring(skip);
+  private ensureBlockQuoteRange(input: string, skip: number): { Lines: string[], Skip: number } {
+    let lines = []
+    let end = skip;
+    let blank = false;
+    let conitnuation = true;
 
-    let end = 0;
-    let blankLine = false;
     while (true) {
       while (end < input.length) {
         if (input[end++] == '\n') {
           break;
         }
       }
-
       skip += end;
-      lines += input.substring(0, end);
-      raw += input.substring(0, end)
+      lines.push(input.substring(0, end));
       input = input.substring(end);
       if (input.length == 0) {
         break;
       }
 
-      // Find the end of block quote.
-      /*
-        1. A blank line follows to blockquote.
-          > any
-          (blank line)
-        2. The last line of blockquote is blank line.
-          > (blank line)
-          any
-        3. Any other element.
-          > any
-          any (except contination text)
-      */
-
+      end = 0;
       let prefix = this.isBlockQuote(input);
       if (prefix != undefined) {
-        raw += input.substring(0, prefix);
-        input = input.substring(prefix);
-        if (this.isBlank(input) != undefined) {
-          blankLine = true;
-        } else {
-          blankLine = false;
+        let succossor = input.substring(prefix);
+
+        blank = false;
+        if (this.isBlank(succossor) != undefined) {
+          blank = true;
         }
+
+        // Check that there is a continuation of text following.
+        conitnuation = true;
+        if (this.isHeading(succossor) != undefined) {
+          conitnuation = false;
+        } else if (this.isHr(succossor) != undefined) {
+          conitnuation = false;
+        } else if (this.isCode(succossor) != undefined) {
+          conitnuation = false;
+        } else if (this.isList(succossor) != undefined) {
+          conitnuation = false;
+        }
+
         skip += prefix;
-      } else if (!blankLine && this.isContinuationText(input)) {
-        this.continuationLines.push(line);
-      } else {
+        end = prefix
+      } else if (!conitnuation || blank) {
         break;
       }
-      line += 1;
-      end = 0;
     }
 
-    if (lines == "") {
-      return 0;
+    return { Lines: lines, Skip: skip };
+  }
+
+  private _blockQuote(input: string, skip: number) {
+    let lines = [];
+    ({ Lines: lines, Skip: skip } = this.ensureBlockQuoteRange(input, skip));
+
+    // TODO: Myabe throw an error when `lines` is empty.
+    let prefix = undefined;
+    let i = 0;
+    let line = "";
+    while (true) {
+      prefix = this.isBlockQuote(lines[i]);
+      if (prefix == undefined) {
+        break;  // The remaining lines are cotinuation text. Add them to last paragraph
+      }
+
+      line += lines[i].substring(prefix);
     }
 
-    let qb: blockQuote = {
-      Name: "BlockQuote",
-      Children: []
+    if (i < lines.length) {
+      let node = this.getNode(this.nodes);
+      while (true) {
+        if (node?.Name != "BlockQuote") {
+          break;
+        }
+        node = this.getNode(node.Children);
+      }
+      // TODO: Add current line to paragraph.
+      if (node?.Name == "Paragraph") {
+        lines = lines.slice(i);
+        node.Raw += lines.join();
+      }
     }
-    this.nodes.push(qb);
-    let oldNodes = this.nodes;
-    this.nodes = qb.Children;
 
-    this.Parse(lines);
+    return skip;
+  }
 
-    // let node = this.getNode(this.nodes);
-    // while (node?.Name == "BlockQuote") {
-    //   node = this.getNode(node.Children);
-    // }
-    // if (node?.Name == "Paragraph") {  // If the last node is paragraph, we check the next lines are a continuation text.
-    //   let end = 0;
-    //   while (input.length > 0) {
-    //     if (!this.isContinuationText(input)) {
+  private blockQuote(input: string, skip: number): number {
+    return this._blockQuote(input, skip);
+
+    // // Remove the block quote markers.
+    // let lines = "";
+    // let line = 0;
+    // let raw = input.substring(0, skip);
+    // input = input.substring(skip);
+
+    // let end = 0;
+    // let blankLine = false;
+    // while (true) {
+    //   while (end < input.length) {
+    //     if (input[end++] == '\n') {
     //       break;
     //     }
-
-    //     end = 0;
-    //     while (end < input.length) {
-    //       if (input[end++] == '\n') {
-    //         break;
-    //       }
-    //     }
-    //     node.Raw += input.substring(0, end);
-    //     input = input.substring(end);
-    //     skip += end;
     //   }
+
+    //   skip += end;
+    //   lines += input.substring(0, end);
+    //   raw += input.substring(0, end);
+    //   input = input.substring(end);
+    //   if (input.length == 0) {
+    //     break;
+    //   }
+
+    //   // Find the end of blockquote.
+    //   /*
+    //     1. A blank line follows to blockquote.
+    //       > any
+    //       (blank line)
+    //     2. The last line of blockquote is blank line.
+    //       > (blank line)
+    //       any
+    //     3. Any other element.
+    //       > any
+    //       any (except contination text)
+    //   */
+
+    //   let prefix = this.isBlockQuote(input);
+    //   if (prefix != undefined) {
+    //     raw += input.substring(0, prefix);
+    //     input = input.substring(prefix);
+    //     if (this.isBlank(input) != undefined) {
+    //       blankLine = true;
+    //     } else {
+    //       blankLine = false;
+    //     }
+    //     skip += prefix;
+    //   } else if (!blankLine && this.isContinuationText(input)) {
+    //     this.continuationLines.push(line);
+    //   } else {
+    //     break;
+    //   }
+    //   line += 1;
+    //   end = 0;
     // }
-    this.continuationLines = [];
-    this.nodes = oldNodes;
-    return skip;
+
+    // if (lines == "") {
+    //   return 0;
+    // }
+
+    // let qb: blockQuote = {
+    //   Name: "BlockQuote",
+    //   Children: []
+    // }
+    // this.nodes.push(qb);
+    // let oldNodes = this.nodes;
+    // this.nodes = qb.Children;
+
+    // this.Parse(lines);
+
+    // // let node = this.getNode(this.nodes);
+    // // while (node?.Name == "BlockQuote") {
+    // //   node = this.getNode(node.Children);
+    // // }
+    // // if (node?.Name == "Paragraph") {  // If the last node is paragraph, we check the next lines are a continuation text.
+    // //   let end = 0;
+    // //   while (input.length > 0) {
+    // //     if (!this.isContinuationText(input)) {
+    // //       break;
+    // //     }
+
+    // //     end = 0;
+    // //     while (end < input.length) {
+    // //       if (input[end++] == '\n') {
+    // //         break;
+    // //       }
+    // //     }
+    // //     node.Raw += input.substring(0, end);
+    // //     input = input.substring(end);
+    // //     skip += end;
+    // //   }
+    // // }
+    // this.continuationLines = [];
+    // this.nodes = oldNodes;
+    // return skip;
   }
 
   private isList(input: string): { Skip: number, Ordered: boolean, Bullet: string } | undefined {
