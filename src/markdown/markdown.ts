@@ -251,7 +251,7 @@ printf("Hello World!");
 
     input = `
 >> a
-> # Heading
+>> ---
 c
 `
     this.Parse(input);
@@ -264,24 +264,28 @@ c
       if ((prefix = this.isBlank(input)) != undefined) {
         this.blank(input, prefix);
         input = input.substring(prefix);
+        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isHeading(input)) != undefined) {
         prefix = this.heading(input, prefix.Skip, prefix.Level);
         input = input.substring(prefix);
+        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isHr(input)) != undefined) {
         this.hr(input, prefix);
         input = input.substring(prefix);
+        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isCode(input)) != undefined) {
         prefix = this.code(input, prefix.Skip, prefix.Fenced);
         input = input.substring(prefix);
+        this.lastParagraph = undefined;
         continue;
       }
 
@@ -620,53 +624,59 @@ c
 
   private ensureBlockQuoteRange(input: string, skip: number): { Lines: string[], Skip: number } {
     let lines = []
-    let end = skip;
+    let end = 0;
     let blank = false;
     let conitnuation = true;
 
     while (true) {
-      while (end < input.length) {
-        if (input[end++] == '\n') {
+      while (skip < input.length) {
+        if (input[skip++] == '\n') {
           break;
         }
       }
-      skip += end;
-      lines.push(input.substring(0, end));
-      input = input.substring(end);
-      if (input.length == 0) {
+      end += skip;
+      lines.push(input.substring(0, skip));
+      input = input.substring(skip);
+      if (input.length == 0 ||
+        this.isBlank(input) ||
+        !conitnuation) {
         break;
       }
 
-      end = 0;
+      skip = 0;
+
       let prefix = this.isBlockQuote(input);
-      if (prefix != undefined) {
-        let succossor = input.substring(prefix);
-
-        blank = false;
-        if (this.isBlank(succossor) != undefined) {
-          blank = true;
-        }
-
-        // Check that there is a continuation of text following.
-        conitnuation = true;
-        if (this.isHeading(succossor) != undefined) {
-          conitnuation = false;
-        } else if (this.isHr(succossor) != undefined) {
-          conitnuation = false;
-        } else if (this.isCode(succossor) != undefined) {
-          conitnuation = false;
-        } else if (this.isList(succossor) != undefined) {
-          conitnuation = false;
-        }
-
-        skip += prefix;
-        end = prefix
-      } else if (!conitnuation || blank) {
+      if (prefix == undefined) {
         break;
       }
+      skip = prefix;
+      // } else {
+      //   if (blank) {
+      //     break;
+      //   }
+      //   skip = 0;
+      // }
+
+      // let succossor = input.substring(skip);
+      // blank = false;
+      // if (this.isBlank(succossor) != undefined) {
+      //   blank = true;
+      // } else {
+      //   conitnuation = true;
+      //   // Check that there is a continuation of text following.
+      //   if (this.isHeading(succossor) != undefined ||
+      //     this.isHr(succossor) != undefined ||
+      //     this.isCode(succossor) != undefined ||
+      //     this.isList(succossor) != undefined) {
+      //     if (prefix == undefined) {
+      //       break;
+      //     } else {
+      //       conitnuation = false;
+      //     }
+      //   }
     }
 
-    return { Lines: lines, Skip: skip };
+    return { Lines: lines, Skip: end };
   }
 
   private _blockQuote(input: string, skip: number) {
@@ -674,32 +684,30 @@ c
     ({ Lines: lines, Skip: skip } = this.ensureBlockQuoteRange(input, skip));
 
     // TODO: Myabe throw an error when `lines` is empty.
+    let quote: blockQuote = {
+      Name: "BlockQuote",
+      Children: [],
+    }
+    let oldNodes = this.nodes;
+    this.nodes = quote.Children;
+
     let prefix = undefined;
     let i = 0;
     let line = "";
-    while (true) {
+    while (i < lines.length) {
       prefix = this.isBlockQuote(lines[i]);
       if (prefix == undefined) {
-        break;  // The remaining lines are cotinuation text. Add them to last paragraph
+        line += lines[i];
+      } else {
+        line += lines[i].substring(prefix);
       }
-
-      line += lines[i].substring(prefix);
+      i++;
     }
 
-    if (i < lines.length) {
-      let node = this.getNode(this.nodes);
-      while (true) {
-        if (node?.Name != "BlockQuote") {
-          break;
-        }
-        node = this.getNode(node.Children);
-      }
-      // TODO: Add current line to paragraph.
-      if (node?.Name == "Paragraph") {
-        lines = lines.slice(i);
-        node.Raw += lines.join();
-      }
-    }
+    this.Parse(line);
+
+    this.nodes = oldNodes;
+    this.nodes.push(quote);
 
     return skip;
   }
@@ -866,7 +874,7 @@ c
       skip += end;
 
       let prefix = this.isSetextHeading(input);
-      if (!this.continuationLines.includes(line) && prefix != undefined) {
+      if (prefix != undefined) {
         this.nodes.push({
           Name: "Heading",
           Raw: raw,
@@ -874,7 +882,7 @@ c
           Level: prefix.Level,
           Children: [],
         });
-
+        this.lastParagraph = undefined;
         return skip + prefix.Skip;
       }
 
@@ -885,17 +893,23 @@ c
       line += 1;
     }
 
-    this.nodes.push({
-      Name: "Paragraph",
-      Raw: raw,
-      Children: [],
-    });
+    if (this.lastParagraph == undefined) {
+      let p: paragraph = {
+        Name: "Paragraph",
+        Raw: raw,
+        Children: [],
+      };
+      this.nodes.push(p);
+      this.lastParagraph = p;
+    } else {
+      this.lastParagraph.Raw += raw;
+    }
     return skip;
   }
 
   private root: node[] = [];
   private nodes: node[] = this.root;
-  private continuationLines: number[] = [];
+  private lastParagraph: paragraph | undefined;
 };
 
 let p = new Markdown();
