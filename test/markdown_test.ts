@@ -1,3 +1,5 @@
+import { Markdown } from "../src/markdown/markdown";
+
 testcase_1();
 
 function testcase_1() {
@@ -107,4 +109,8 @@ function testcase_1() {
   md.Parse(input);
   let nodes = md.GetNodes();
   console.dir(nodes, { depth: Infinity });
+  if (nodes.length != 69) {
+    console.error(`Length of nodes is not correct! [ Expection: 69 | Real: ${nodes.length} ]`);
+    return;
+  }
 }

@@ -48,7 +48,7 @@ type listItem = {
   Raw: string,
 };
 
-class Markdown {
+export class Markdown {
   Parse(input: string) {
     let prefix = undefined;
     while (input.length > 0) {
@@ -342,6 +342,10 @@ class Markdown {
     } else {
       let language = "";
       if (input[skip] != '\n') {
+        // Skip the spaces which follows the fence code remarker.
+        while (input[skip] == ' ' || input[skip] == '\t') {
+          skip++;
+        }
         start = skip;
         while (skip < input.length && input[skip++] != '\n')
           ;
