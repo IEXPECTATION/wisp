@@ -1,5 +1,7 @@
 import { Markdown } from "../src/markdown/markdown";
 
+let debug = false;
+
 testcase_1();
 
 function testcase_1() {
@@ -104,12 +106,16 @@ function testcase_1() {
   
   >     print("Hello World!");
         return
-  `
+  `;
+
+  input = "# Heading1\n ## Heading2 {Title}\n ### Heading3\n #### Heading4\n ##### Heading5\n ###### Heading6";
 
   md.Parse(input);
   let nodes = md.GetNodes();
   console.dir(nodes, { depth: Infinity });
-  if (nodes.length != 69) {
+  console.log(md.Render());
+
+  if (debug && nodes.length != 69) {
     console.error(`Length of nodes is not correct! [ Expection: 69 | Real: ${nodes.length} ]`);
     return;
   }

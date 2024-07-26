@@ -1,7 +1,8 @@
 const TabSize = 4;
 
-type node = blank | heading | hr | code | blockQuote | list | listItem | paragraph;
+type node = blank | heading | hr | code | blockQuote | list | listItem | paragraph | text;
 
+// Block Node
 type blank = {
   Name: "Blank",
   Raw: string,
@@ -47,6 +48,28 @@ type listItem = {
   Name: "ListItem",
   Raw: string,
 };
+
+// Inline Node
+type text = {
+  Name: "Text",
+  Text: string,
+};
+
+type em = {
+  Name: "Emphais",
+  Blod: boolean,
+  Text: string,
+}
+
+type escape = {
+  Name: "Escape",
+  Text: string,
+}
+
+type codeSpan = {
+  Name: "CodeSpan",
+  Text: string,
+}
 
 export class Markdown {
   Parse(input: string) {
@@ -95,7 +118,18 @@ export class Markdown {
   }
 
   Render(): string {
-    return "";
+    let visistor = function (output: string, node: node): string {
+      switch (node.Name) {
+        case "Blank":
+          break;
+        case "Heading":
+          output += node.Text;
+          break;
+      }
+      return output;
+    }
+    let output = "";
+    return this.render(this.nodes, output, visistor);
   }
 
   // Only for test
@@ -218,7 +252,7 @@ export class Markdown {
     }
 
     let end = skip - 1;
-    while (input[end - 1] == ' ') {
+    while (input[end] == ' ' || input[end] == '\t') {
       end--;
     }
 
@@ -611,6 +645,41 @@ export class Markdown {
       this.lastParagraph.Raw += raw;
     }
     return skip;
+  }
+
+  private enterNode(output: string, node: node): string {
+    switch (node.Name) {
+      case "Blank":
+        break;
+      case "Heading":
+        // TODO: 
+        output += `<h${node.Level}>`;
+        break;
+      case "Text":
+        output += node.Text;
+        break;
+    }
+    return output;
+  }
+
+  private levelNode(output: string, node: node): string {
+    switch (node.Name) {
+      case "Blank":
+        break;
+      case "Heading":
+        output += `</h${node.Level}>\n`;
+        break;
+    }
+    return output;
+  }
+
+  private render(nodes: node[], output: string, visistor: ((output: string, node: node) => string)): string {
+    for (let node of nodes) {
+      output = this.enterNode(output, node);
+      output = visistor(output, node);
+      output = this.levelNode(output, node);
+    }
+    return output;
   }
 
   private root: node[] = [];
