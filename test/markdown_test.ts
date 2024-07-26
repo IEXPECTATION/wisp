@@ -1,21 +1,110 @@
-import { exit } from "process";
-import { Lexer, Tokenizer } from "../src/markdown/markdown";
+testcase_1();
 
-let lex = new Lexer(new Tokenizer());
+function testcase_1() {
+  let md = new Markdown();
+  let input = `
+  # Heading
+  
+  
+  
+  ** *
+  \`\`\` c
+  printf("Hello World!");
+  \`\`\`
+  
+  ~~~ c
+  printf("Hello World!");
+  ~~~
+  
+      printf("Hello World!");
+      return 0;
+  
+        printf("Hello World");
+  ***
+  
+  > > # Heading1
+  ***
+  
+  >> ***
+  ***
+  
+  >> ***
+      printf("Hello World!");
+  
+  >> ***
+  >> ***
+  
+  > ***
+  >> ***
+  
+  > ***
+  >> ***
+  > ***
+  
+  > ***
+  >> ***
+  > ***
+  >>> ---
+  
+  > # Heading1
+  >
+  abc
+  
+  > abc
+  def
+  
+  > abc
+  ===
+  
+  > abc
+  > ===
+  
+  > def
+  > ---
+  
+  > abc
+  >> ===
+  
+  edf
+  ===
+  
+  def
+  
+  ===
+  
+  paragraph
+  # Heading
+  
+  >     asdasd
+  >     asdasd
+  >     asdasd
+  
+  >     asdasd
+        asdasd
+        asdasd
+  
+  > ~~~ c
+  > printf("Hello World!");
+  > ~~~
+  
+  > ~~~ c
+  > printf("Hello World!");
+  ~~~
+  
+  > ~~~ c
+  printf("Hello World!");
+  ~~~
+  
+  > ~~~ c
+  
+  >     printf("Hello World!");
+  >     return
+  
+  >     print("Hello World!");
+        return
+  `
 
-// let input = "``` c \nprintf(\"Hello World\");\n return 0;\n```";
-// let input = `1. asb
-//    bcd
-// asdasdasd
-
-// 2. asd`
-
-let input  = `> > asd
-> ---
-> asd
-asdasd
-***
-`
-// lex.Lex(input);
-lex.BlockQuote(input);
-console.dir(lex.nodes, { depth: Infinity });
+  md.Parse(input);
+  let nodes = md.GetNodes();
+  console.dir(nodes, { depth: Infinity });
+}

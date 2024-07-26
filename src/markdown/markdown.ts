@@ -49,247 +49,39 @@ type listItem = {
 };
 
 class Markdown {
-  Main() {
-    /*
-    # Heading
-
-
-
-** *
-\`\`\` c
-printf("Hello World!");
-\`\`\`
-
-~~~ c
-printf("Hello World!");
-~~~
-
-    printf("Hello World!");
-    return 0;
-
-      printf("Hello World");
-***
-
-> > # Heading1
-***
-
->> ***
-***
-
->> ***
-    printf("Hello World!");
-
->> ***
->> ***
-
-> ***
->> ***
-
-> ***
->> ***
-> ***
-
-> ***
->> ***
-> ***
->>> ---
-
-> # Heading1
->
-abc
-
-> abc
-def
-
-> abc
-===
-
-> abc
-> ===
-
-> def
-> ---
-
-> abc
->> ===
-
-edf
-===
-
-def
-
-===
-
-paragraph
-# Heading
-
->     asdasd
->     asdasd
->     asdasd
-
->     asdasd
-      asdasd
-      asdasd
-
-> ~~~ c
-> printf("Hello World!");
-> ~~~
-
-> ~~~ c
-> printf("Hello World!");
-~~~
-
-> ~~~ c
-printf("Hello World!");
-~~~
-
->     printf("Hello World!");
->     return
-
->     print("Hello World!");
-      return
- */
-    let input = `
-# Heading
-
-
-
-** *
-\`\`\` c
-printf("Hello World!");
-\`\`\`
-
-~~~ c
-printf("Hello World!");
-~~~
-
-    printf("Hello World!");
-    return 0;
-
-      printf("Hello World");
-***
-
-> > # Heading1
-***
-
->> ***
-***
-
->> ***
-    printf("Hello World!");
-
->> ***
->> ***
-
-> ***
->> ***
-
-> ***
->> ***
-> ***
-
-> ***
->> ***
-> ***
->>> ---
-
-> # Heading1
->
-abc
-
-> abc
-def
-
-> abc
-===
-
-> abc
-> ===
-
-> def
-> ---
-
-> abc
->> ===
-
-edf
-===
-
-def
-
-===
-
-paragraph
-# Heading
-
->     asdasd
->     asdasd
->     asdasd
-
->     asdasd
-      asdasd
-      asdasd
-
-> ~~~ c
-> printf("Hello World!");
-> ~~~
-
-> ~~~ c
-> printf("Hello World!");
-~~~
-
-> ~~~ c
-printf("Hello World!");
-~~~
-
->     printf("Hello World!");
->     return
-
->     print("Hello World!");
-      return
-`
-
-    input = `
->> a
->> ---
-c
-`
-    this.Parse(input);
-    console.dir(this.root, { depth: Infinity });
-  }
-
   Parse(input: string) {
     let prefix = undefined;
     while (input.length > 0) {
       if ((prefix = this.isBlank(input)) != undefined) {
+        this.lastParagraph = undefined;
         this.blank(input, prefix);
         input = input.substring(prefix);
-        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isHeading(input)) != undefined) {
+        this.lastParagraph = undefined;
         prefix = this.heading(input, prefix.Skip, prefix.Level);
         input = input.substring(prefix);
-        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isHr(input)) != undefined) {
+        this.lastParagraph = undefined;
         this.hr(input, prefix);
         input = input.substring(prefix);
-        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isCode(input)) != undefined) {
+        this.lastParagraph = undefined;
         prefix = this.code(input, prefix.Skip, prefix.Fenced);
         input = input.substring(prefix);
-        this.lastParagraph = undefined;
         continue;
       }
 
       if ((prefix = this.isBlockQuote(input)) != undefined) {
+        this.lastParagraph = undefined;
         prefix = this.blockQuote(input, prefix)
         input = input.substring(prefix);
         continue;
@@ -300,6 +92,15 @@ c
         continue;
       }
     }
+  }
+
+  Render(): string {
+    return "";
+  }
+
+  // Only for test
+  GetNodes(): node[] {
+    return this.nodes;
   }
 
   private getNode(tokens: node[], index: number = -1): node | undefined {
@@ -679,7 +480,7 @@ c
     return { Lines: lines, Skip: end };
   }
 
-  private _blockQuote(input: string, skip: number) {
+  private blockQuote(input: string, skip: number) {
     let lines = [];
     ({ Lines: lines, Skip: skip } = this.ensureBlockQuoteRange(input, skip));
 
@@ -710,105 +511,6 @@ c
     this.nodes.push(quote);
 
     return skip;
-  }
-
-  private blockQuote(input: string, skip: number): number {
-    return this._blockQuote(input, skip);
-
-    // // Remove the block quote markers.
-    // let lines = "";
-    // let line = 0;
-    // let raw = input.substring(0, skip);
-    // input = input.substring(skip);
-
-    // let end = 0;
-    // let blankLine = false;
-    // while (true) {
-    //   while (end < input.length) {
-    //     if (input[end++] == '\n') {
-    //       break;
-    //     }
-    //   }
-
-    //   skip += end;
-    //   lines += input.substring(0, end);
-    //   raw += input.substring(0, end);
-    //   input = input.substring(end);
-    //   if (input.length == 0) {
-    //     break;
-    //   }
-
-    //   // Find the end of blockquote.
-    //   /*
-    //     1. A blank line follows to blockquote.
-    //       > any
-    //       (blank line)
-    //     2. The last line of blockquote is blank line.
-    //       > (blank line)
-    //       any
-    //     3. Any other element.
-    //       > any
-    //       any (except contination text)
-    //   */
-
-    //   let prefix = this.isBlockQuote(input);
-    //   if (prefix != undefined) {
-    //     raw += input.substring(0, prefix);
-    //     input = input.substring(prefix);
-    //     if (this.isBlank(input) != undefined) {
-    //       blankLine = true;
-    //     } else {
-    //       blankLine = false;
-    //     }
-    //     skip += prefix;
-    //   } else if (!blankLine && this.isContinuationText(input)) {
-    //     this.continuationLines.push(line);
-    //   } else {
-    //     break;
-    //   }
-    //   line += 1;
-    //   end = 0;
-    // }
-
-    // if (lines == "") {
-    //   return 0;
-    // }
-
-    // let qb: blockQuote = {
-    //   Name: "BlockQuote",
-    //   Children: []
-    // }
-    // this.nodes.push(qb);
-    // let oldNodes = this.nodes;
-    // this.nodes = qb.Children;
-
-    // this.Parse(lines);
-
-    // // let node = this.getNode(this.nodes);
-    // // while (node?.Name == "BlockQuote") {
-    // //   node = this.getNode(node.Children);
-    // // }
-    // // if (node?.Name == "Paragraph") {  // If the last node is paragraph, we check the next lines are a continuation text.
-    // //   let end = 0;
-    // //   while (input.length > 0) {
-    // //     if (!this.isContinuationText(input)) {
-    // //       break;
-    // //     }
-
-    // //     end = 0;
-    // //     while (end < input.length) {
-    // //       if (input[end++] == '\n') {
-    // //         break;
-    // //       }
-    // //     }
-    // //     node.Raw += input.substring(0, end);
-    // //     input = input.substring(end);
-    // //     skip += end;
-    // //   }
-    // // }
-    // this.continuationLines = [];
-    // this.nodes = oldNodes;
-    // return skip;
   }
 
   private isList(input: string): { Skip: number, Ordered: boolean, Bullet: string } | undefined {
@@ -911,6 +613,3 @@ c
   private nodes: node[] = this.root;
   private lastParagraph: paragraph | undefined;
 };
-
-let p = new Markdown();
-p.Main();
