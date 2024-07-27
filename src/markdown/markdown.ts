@@ -1,6 +1,6 @@
 const TabSize = 4;
 
-type node = blank | heading | hr | code | blockQuote | list | listItem | paragraph | text;
+type node = blank | heading | hr | code | blockquote | list | listitem | paragraph | text | em | escape | codespan;
 
 // Block Node
 type blank = {
@@ -28,10 +28,17 @@ type code = {
   Language: string, // TODO: It should use a map to list all supports languages, Or not a string.
 };
 
-type blockQuote = {
+type blockquote = {
   Name: "BlockQuote",
   Children: node[];
 };
+
+type def = {
+  Name: "Definition",
+  Label: string,
+  Path: string,
+  Title: string,
+}
 
 type paragraph = {
   Name: "Paragraph",
@@ -41,10 +48,10 @@ type paragraph = {
 
 type list = {
   Name: "List",
-  Children: listItem[];
+  Children: listitem[];
 };
 
-type listItem = {
+type listitem = {
   Name: "ListItem",
   Raw: string,
 };
@@ -66,13 +73,13 @@ type escape = {
   Text: string,
 }
 
-type codeSpan = {
+type codespan = {
   Name: "CodeSpan",
   Text: string,
 }
 
 export class Markdown {
-  parse(input: string) {
+  Parse(input: string) {
     let prefix = undefined;
     while (input.length > 0) {
       if ((prefix = this.isBlank(input)) != undefined) {
@@ -103,9 +110,16 @@ export class Markdown {
         continue;
       }
 
-      if ((prefix = this.isBlockQuote(input)) != undefined) {
+      if ((prefix = this.isDef(input)) != undefined) {
         this.lastParagraph = undefined;
-        prefix = this.blockQuote(input, prefix)
+        prefix = this.def(input, prefix.Skip, prefix.Label);
+        input = input.substring(prefix);
+        continue;
+      }
+
+      if ((prefix = this.isBlockqute(input)) != undefined) {
+        this.lastParagraph = undefined;
+        prefix = this.blockquote(input, prefix)
         input = input.substring(prefix);
         continue;
       }
@@ -117,7 +131,7 @@ export class Markdown {
     }
   }
 
-  render(): string {
+  Render(): string {
     let visistor = function (output: string, node: node): string {
       switch (node.Name) {
         case "Blank":
@@ -128,24 +142,12 @@ export class Markdown {
       }
       return output;
     }
-    let output = "";
-    return this.walk(this.nodes, output, visistor);
+    return this.render(this.nodes, "", visistor);
   }
 
   // Only for test
-  GetNodes(): node[] {
+  getNodes(): node[] {
     return this.nodes;
-  }
-
-  private getNode(tokens: node[], index: number = -1): node | undefined {
-    let length = tokens.length;
-    if (length == 0) {
-      return undefined;
-    }
-    if (index < 0) {
-      return tokens[length + index];
-    }
-    return tokens[index];
   }
 
   private skipLeaddingWhiteSpace(input: string, offset: number = 0): { Skip: number, NumberOfSpaces: number } {
@@ -183,7 +185,7 @@ export class Markdown {
       return false;
     }
 
-    if (this.isBlockQuote(input) != undefined) {
+    if (this.isBlockqute(input) != undefined) {
       return false;
     }
 
@@ -198,15 +200,15 @@ export class Markdown {
     let skip = 0;
 
     while (input.length > 0) {
-      let { Skip: offset, NumberOfSpaces: count } = this.skipLeaddingWhiteSpace(input);
-      if (count < input.length && input[offset] != '\n') {
+      let { Skip: end, NumberOfSpaces: count } = this.skipLeaddingWhiteSpace(input);
+      if (count < input.length && input[end] != '\n') {
         break;
       }
-      if (offset < input.length) {
-        offset++;
+      if (end < input.length) {
+        end++;
       }
-      skip += offset;
-      input = input.substring(offset);
+      skip += end;
+      input = input.substring(end);
     }
 
     if (skip > 0) {
@@ -434,8 +436,46 @@ export class Markdown {
     return skip;
   }
 
-  private def(input: string): number {
+  private isDef(input: string): { Skip: number, Label: string } | undefined {
+    let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
+    if (skip < input.length && numberOfSpaces >= TabSize) {
+      return undefined;
+    }
+
+    if (input[skip] != '[') {
+      return undefined;
+    }
+
+    let label_start = skip + 1;
+    while (skip < input.length) {
+      if (input[++skip] == ']') {
+        break;
+      }
+    }
+
+    let label_end = skip;
+    if (skip == input.length ||
+      input[++skip] != ':'
+    ) {
+      return undefined;
+    }
+
+    while (++skip < input.length) {
+      // Skips the following white spaces.
+      if (input[skip] != ' ' && input[skip] != '\t' && input[skip] != '\n') {
+        break;
+      }
+    }
+
+    return { Skip: skip, Label: input.substring(label_start, label_end) };
+  }
+
+  private def(input: string, skip: number, label: string): number {
     // TODO: TBD
+    let end = 0;
+
+
+
     return 0;
   }
 
@@ -444,7 +484,7 @@ export class Markdown {
     return 0;
   }
 
-  private isBlockQuote(input: string): number | undefined {
+  private isBlockqute(input: string): number | undefined {
     let { Skip: skip, NumberOfSpaces: numberOfSpaces } = this.skipLeaddingWhiteSpace(input);
     if (numberOfSpaces >= TabSize || skip == input.length) {
       return undefined;
@@ -461,7 +501,7 @@ export class Markdown {
     return skip;
   }
 
-  private ensureBlockQuoteRange(input: string, skip: number): { Lines: string[], Skip: number } {
+  private ensureBlockquoteRange(input: string, skip: number): { Skip: number, Lines: string[] } {
     let lines = []
     let end = 0;
 
@@ -481,22 +521,22 @@ export class Markdown {
 
       skip = 0;
 
-      let prefix = this.isBlockQuote(input);
+      let prefix = this.isBlockqute(input);
       if (prefix == undefined) {
         break;
       }
       skip = prefix;
     }
 
-    return { Lines: lines, Skip: end };
+    return { Skip: end, Lines: lines };
   }
 
-  private blockQuote(input: string, skip: number) {
+  private blockquote(input: string, skip: number) {
     let lines = [];
-    ({ Lines: lines, Skip: skip } = this.ensureBlockQuoteRange(input, skip));
+    ({ Skip: skip, Lines: lines } = this.ensureBlockquoteRange(input, skip));
 
     // TODO: Myabe throw an error when `lines` is empty.
-    let quote: blockQuote = {
+    let quote: blockquote = {
       Name: "BlockQuote",
       Children: [],
     }
@@ -507,7 +547,7 @@ export class Markdown {
     let i = 0;
     let line = "";
     while (i < lines.length) {
-      prefix = this.isBlockQuote(lines[i]);
+      prefix = this.isBlockqute(lines[i]);
       if (prefix == undefined) {
         line += lines[i];
       } else {
@@ -516,7 +556,7 @@ export class Markdown {
       i++;
     }
 
-    this.parse(line);
+    this.Parse(line);
 
     this.nodes = oldNodes;
     this.nodes.push(quote);
@@ -618,7 +658,7 @@ export class Markdown {
     return end;
   }
 
-  private enterNode(output: string, node: node): string {
+  private nodeEnter(output: string, node: node): string {
     switch (node.Name) {
       case "Blank":
         break;
@@ -633,7 +673,7 @@ export class Markdown {
     return output;
   }
 
-  private levelNode(output: string, node: node): string {
+  private nodeLevel(output: string, node: node): string {
     switch (node.Name) {
       case "Blank":
         break;
@@ -644,11 +684,11 @@ export class Markdown {
     return output;
   }
 
-  private walk(nodes: node[], output: string, visistor: ((output: string, node: node) => string)): string {
+  private render(nodes: node[], output: string, visistor: ((output: string, node: node) => string)): string {
     for (let node of nodes) {
-      output = this.enterNode(output, node);
+      output = this.nodeEnter(output, node);
       output = visistor(output, node);
-      output = this.levelNode(output, node);
+      output = this.nodeLevel(output, node);
     }
     return output;
   }
