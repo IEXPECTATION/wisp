@@ -72,7 +72,7 @@ type codeSpan = {
 }
 
 export class Markdown {
-  Parse(input: string) {
+  parse(input: string) {
     let prefix = undefined;
     while (input.length > 0) {
       if ((prefix = this.isBlank(input)) != undefined) {
@@ -117,7 +117,7 @@ export class Markdown {
     }
   }
 
-  Render(): string {
+  render(): string {
     let visistor = function (output: string, node: node): string {
       switch (node.Name) {
         case "Blank":
@@ -129,7 +129,7 @@ export class Markdown {
       return output;
     }
     let output = "";
-    return this.render(this.nodes, output, visistor);
+    return this.walk(this.nodes, output, visistor);
   }
 
   // Only for test
@@ -464,8 +464,6 @@ export class Markdown {
   private ensureBlockQuoteRange(input: string, skip: number): { Lines: string[], Skip: number } {
     let lines = []
     let end = 0;
-    let blank = false;
-    let conitnuation = true;
 
     while (true) {
       while (skip < input.length) {
@@ -477,8 +475,7 @@ export class Markdown {
       lines.push(input.substring(0, skip));
       input = input.substring(skip);
       if (input.length == 0 ||
-        this.isBlank(input) ||
-        !conitnuation) {
+        this.isBlank(input)) {
         break;
       }
 
@@ -489,30 +486,6 @@ export class Markdown {
         break;
       }
       skip = prefix;
-      // } else {
-      //   if (blank) {
-      //     break;
-      //   }
-      //   skip = 0;
-      // }
-
-      // let succossor = input.substring(skip);
-      // blank = false;
-      // if (this.isBlank(succossor) != undefined) {
-      //   blank = true;
-      // } else {
-      //   conitnuation = true;
-      //   // Check that there is a continuation of text following.
-      //   if (this.isHeading(succossor) != undefined ||
-      //     this.isHr(succossor) != undefined ||
-      //     this.isCode(succossor) != undefined ||
-      //     this.isList(succossor) != undefined) {
-      //     if (prefix == undefined) {
-      //       break;
-      //     } else {
-      //       conitnuation = false;
-      //     }
-      //   }
     }
 
     return { Lines: lines, Skip: end };
@@ -543,7 +516,7 @@ export class Markdown {
       i++;
     }
 
-    this.Parse(line);
+    this.parse(line);
 
     this.nodes = oldNodes;
     this.nodes.push(quote);
@@ -600,18 +573,17 @@ export class Markdown {
     }
 
     let raw = "";
-    let end = skip;
-    let line = 0;
+    let end = 0;
     while (input.length > 0) {
-      while (end < input.length) {
-        if (input[end++] == '\n') {
+      while (skip < input.length) {
+        if (input[skip++] == '\n') {
           break;
         }
       }
 
-      raw += input.substring(0, end);
-      input = input.substring(end);
-      skip += end;
+      raw += input.substring(0, skip);
+      input = input.substring(skip);
+      end += skip;
 
       let prefix = this.isSetextHeading(input);
       if (prefix != undefined) {
@@ -623,14 +595,13 @@ export class Markdown {
           Children: [],
         });
         this.lastParagraph = undefined;
-        return skip + prefix.Skip;
+        return end + prefix.Skip;
       }
 
       if (!this.isContinuationText(input)) {
         break;
       }
-      end = 0;
-      line += 1;
+      skip = 0;
     }
 
     if (this.lastParagraph == undefined) {
@@ -644,7 +615,7 @@ export class Markdown {
     } else {
       this.lastParagraph.Raw += raw;
     }
-    return skip;
+    return end;
   }
 
   private enterNode(output: string, node: node): string {
@@ -652,7 +623,7 @@ export class Markdown {
       case "Blank":
         break;
       case "Heading":
-        // TODO: 
+        // TODO:
         output += `<h${node.Level}>`;
         break;
       case "Text":
@@ -673,7 +644,7 @@ export class Markdown {
     return output;
   }
 
-  private render(nodes: node[], output: string, visistor: ((output: string, node: node) => string)): string {
+  private walk(nodes: node[], output: string, visistor: ((output: string, node: node) => string)): string {
     for (let node of nodes) {
       output = this.enterNode(output, node);
       output = visistor(output, node);
