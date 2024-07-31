@@ -166,10 +166,7 @@ export class Markdown {
   }
 
   private isContinuationText(input: string, indent: number = 0): boolean {
-    if (this.isBlank(input) != undefined) {
-      if (indent != 0) {
-        return true;
-      }
+    if (this.isBlank(input) != undefined && indent != 0) {
       return false;
     }
 
@@ -454,9 +451,7 @@ export class Markdown {
     }
 
     let label_end = skip;
-    if (skip == input.length ||
-      input[++skip] != ':'
-    ) {
+    if (skip == input.length) {
       return undefined;
     }
 
@@ -473,7 +468,9 @@ export class Markdown {
   private def(input: string, skip: number, label: string): number {
     // TODO: TBD
     let end = 0;
-
+    if(input[++skip] != ':') {
+      return skip;
+    }
 
 
     return 0;
