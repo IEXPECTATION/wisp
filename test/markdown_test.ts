@@ -123,3 +123,15 @@ function testcase_1() {
 
   console.log(md.Render());
 }
+
+function ParsingHeading_test() {
+  let md = new Markdown("");
+  let h1 = "# H1";
+  let h2 = "## H2";
+  let h3 = "### H3";
+  let h4 = "#### H4";
+  let h5 = "##### H5";
+  let h6 = "###### H6";
+
+
+}

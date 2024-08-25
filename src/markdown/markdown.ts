@@ -25,7 +25,7 @@ type code = {
   Name: "IndentedCode" | "FencedCode",
   Raw: string;
   Text: string;
-  Language: string, // TODO: It should use a map to list all supports languages, Or not a string.
+  Language: string, // TODO: It should use a map to list all supported languages rather than a string.
 };
 
 type blockquote = {
@@ -79,6 +79,10 @@ type codespan = {
 }
 
 export class Markdown {
+  constructor(input: string) {
+    this.input = input;
+  }
+
   Parse(input: string) {
     let prefix = undefined;
     while (input.length > 0) {
@@ -126,6 +130,18 @@ export class Markdown {
 
       if ((prefix = this.paragraph(input)) != undefined) {
         input = input.substring(prefix);
+        continue;
+      }
+    }
+  }
+
+  private parse() {
+    while (!this.finish()) {
+      let count = this.skipBlankChar();
+
+      if (count >= TabSize) {
+        this.advance();
+
         continue;
       }
     }
@@ -443,14 +459,14 @@ export class Markdown {
       return undefined;
     }
 
-    let label_start = skip + 1;
+    let labelStart = skip + 1;
     while (skip < input.length) {
       if (input[++skip] == ']') {
         break;
       }
     }
 
-    let label_end = skip;
+    let labelEnd = skip;
     if (skip == input.length) {
       return undefined;
     }
@@ -462,13 +478,13 @@ export class Markdown {
       }
     }
 
-    return { Skip: skip, Label: input.substring(label_start, label_end) };
+    return { Skip: skip, Label: input.substring(labelStart, labelEnd) };
   }
 
   private def(input: string, skip: number, label: string): number {
     // TODO: TBD
     let end = 0;
-    if(input[++skip] != ':') {
+    if (input[++skip] != ':') {
       return skip;
     }
 
@@ -690,7 +706,97 @@ export class Markdown {
     return output;
   }
 
-  private root: node[] = [];
-  private nodes: node[] = this.root;
+  private peek(): string | undefined {
+    if ((this.offset + this.peekOffset) == this.input.length) {
+      return undefined;
+    }
+    return this.input[this.offset + this.peekOffset++];
+  }
+
+  private peekNext(char: string): string | undefined {
+    let line = "";
+
+    let nextChar = undefined;
+    while ((nextChar = this.peek()) != undefined) {
+      line += nextChar;
+      if (nextChar == char) {
+        break;
+      }
+    }
+
+    return line;
+  }
+
+  private peekLine() {
+    return this.peekNext('\n');
+  }
+
+  private advance(offset: number = -1) {
+    if (offset < 0) {
+      offset = this.peekOffset;
+    }
+    this.offset += offset;
+    this.peekOffset = 0;
+  }
+
+  // Return the number of blank character.
+  private skipBlankChar(): number {
+    let count = 0;
+    let c = undefined;
+    while (true) {
+      c = this.peek();
+      if (c == undefined) {
+        break;
+      }
+
+      if (c == ' ') {
+        count++;
+      } else if (c == '\t') {
+        count += 4;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
+
+  private _isCode(): {
+    Kind: "IndentedCode" | "FencedCode",
+    Fenced: {
+      Bullet: string,
+      Length: number,
+    } | undefined
+  } | undefined {
+    let count = this.skipBlankChar();
+    if (count >= TabSize) {
+      this.advance();
+      return { Kind: "IndentedCode", Fenced: undefined };
+    }
+
+    this.advance(0);
+    this.peekNext('~');
+    if (this.peekOffset >= 3) {
+      this.advance()
+      return { Kind: "FencedCode", Fenced: { Bullet: '~', Length: this.peekOffset } }
+    }
+
+    this.peekNext('`');
+    if (this.peekOffset >= 3) {
+      this.advance()
+      return { Kind: "FencedCode", Fenced: { Bullet: '`', Length: this.peekOffset } }
+    }
+
+    return undefined;
+  }
+
+  private finish(): boolean {
+    return this.offset == this.input.length;
+  }
+
+  private offset: number = 0;
+  private peekOffset: number = 0;
+  private input: string = "";
+  private nodes: node[] = [];
   private lastParagraph: paragraph | undefined;
+
 };
