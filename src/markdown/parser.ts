@@ -1,6 +1,6 @@
 import { Scanner, Token } from "./scanner";
 
-interface Node {
+export interface Node {
   // Parent: Node | null;
   Token: Token | null;
   Children: Node[] | null;
@@ -11,7 +11,6 @@ export class Parser {
     this.scanner = scanner;
     this.root = { Token: null, Children: [] };
     this.openedNode = [];
-    this.openedNode.push(this.root);
     this.currentNode = this.root;
   }
 
@@ -19,12 +18,16 @@ export class Parser {
     let token = undefined;
 
     while ((token = this.scanner.Scan()) != undefined) {
+      let last = this.openedNode[this.openedNode.length - 1];
+      let node: Node = { Token: token, Children: null };
       switch (token.Name) {
+        case "BlankLine":
         case "Heading": {
-          let last = this.openedNode[this.openedNode.length - 1];
-          let node: Node = { Token: token, Children: null };
-          last.Children!.push(node);
-          this.currentNode = node
+          this.currentNode?.Children?.push(node);
+        }
+          break;
+        case "BlockQuote": {
+
         }
           break;
       }
@@ -39,3 +42,20 @@ export class Parser {
   private openedNode: Node[];
   private currentNode: Node | undefined;
 }
+
+export function ParserCommonTestcase1() {
+  let input = "# heaidng";
+  let parser = new Parser(new Scanner(input))
+  console.info("### == ParserCommonTestcase1 == ###");
+  let node = parser.Parse();
+  if (node.Children?.length == 1 &&
+    node.Children[0].Token?.Name == "Heading"
+  ) {
+    console.log("### TEST PASSED! ###");
+  } else {
+    console.error("### TEST FAILED! ###");
+  }
+  console.info("### == ParserCommonTestcase1 == ###");
+}
+
+ParserCommonTestcase1();
