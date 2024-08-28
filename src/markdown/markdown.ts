@@ -79,7 +79,7 @@ type codespan = {
 }
 
 export class Markdown {
-  constructor(input: string) {
+  constructor(input: string = "") {
     this.input = input;
   }
 
