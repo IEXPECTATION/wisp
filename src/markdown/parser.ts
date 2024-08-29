@@ -9,20 +9,18 @@ export interface Node {
 export class Parser {
   constructor(scanner: Scanner) {
     this.scanner = scanner;
-    this.root = { Token: null, Children: [] };
-    this.openedNode = [];
-    this.currentNode = this.root;
   }
 
   Parse(): Node {
     let token = undefined;
 
     while ((token = this.scanner.Scan()) != undefined) {
-      let last = this.openedNode[this.openedNode.length - 1];
-      let node: Node = { Token: token, Children: null };
+      this.cleanup(token.Name);
+
       switch (token.Name) {
         case "BlankLine":
         case "Heading": {
+          let node: Node = { Token: token, Children: null };
           this.currentNode?.Children?.push(node);
         }
           break;
@@ -36,11 +34,16 @@ export class Parser {
     return this.root;
   }
 
+  private cleanup(tokenName: string) {
+
+  }
+
   private scanner: Scanner;
 
-  private root: Node;
-  private openedNode: Node[];
-  private currentNode: Node | undefined;
+  private root: Node = { Token: null, Children: [] };
+  private openedNode: Node[] = [];
+  private indexOfMachtedNode: number = 0;
+  private currentNode: Node = this.root;
 }
 
 export function ParserCommonTestcase1() {
@@ -58,4 +61,6 @@ export function ParserCommonTestcase1() {
   console.info("### == ParserCommonTestcase1 == ###");
 }
 
-ParserCommonTestcase1();
+export function ParserTestcases() {
+  ParserCommonTestcase1();
+}

@@ -1,7 +1,9 @@
+import { ParserTestcases } from "../src/markdown/parser";
 import { ScannerTestcases } from "../src/markdown/scanner";
 
 (function main() {
   ScannerTestcases();
+  ParserTestcases();
 })();
 
 
