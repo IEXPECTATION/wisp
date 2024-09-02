@@ -1,4 +1,4 @@
-import { Scanner, Token } from "./scanner";
+import { blockQuoteToken, IndentedCodeToken, Scanner, Token } from "./scanner";
 
 export interface Node {
   // Parent: Node | null;
@@ -15,38 +15,45 @@ export class Parser {
     let token = undefined;
 
     while ((token = this.scanner.Scan()) != undefined) {
-      this.cleanup(token.Name);
-
-      switch (token.Name) {
-        case "BlankLine":
-        case "Heading": {
-          let node: Node = { Token: token, Children: null };
-          this.currentNode?.Children?.push(node);
-        }
-          break;
-        case "BlockQuote": {
-
-        }
-          break;
-      }
+      this.prase(token);
     }
 
     return this.root;
   }
 
-  private cleanup(tokenName: string) {
+  private prase(token: Token) {
+    switch (token.Name) {
+      case "BlankLine":
+      case "Heading": {
+        let node: Node = { Token: token, Children: null };
+        this.currentNode!.Children!.push(node);
+      }
+        break;
+      case "BlockQuote": {
+        let bq = token as blockQuoteToken;
+        if (bq.Token != undefined) {
+          return;
+        }
 
+        if(this.openedNodes.length == 0 || this.openedNodes[this.openedNodes.length - 1].Token?.Name != "BlockQuote") {
+        }
+      }
+        break;
+    }
   }
+
+
 
   private scanner: Scanner;
 
   private root: Node = { Token: null, Children: [] };
-  private openedNode: Node[] = [];
-  private indexOfMachtedNode: number = 0;
-  private currentNode: Node = this.root;
+  private openedNodes: Node[] = [];
+  private matchedNodeIndex = 0;
+  private matchedNodeIndexs: number[] = [];
+  private currentNode: Node | undefined = this.root;
 }
 
-export function ParserCommonTestcase1() {
+function ParserCommonTestcase1() {
   let input = "# heaidng";
   let parser = new Parser(new Scanner(input))
   console.info("### == ParserCommonTestcase1 == ###");
@@ -61,6 +68,39 @@ export function ParserCommonTestcase1() {
   console.info("### == ParserCommonTestcase1 == ###");
 }
 
+function ParserCommonTestcase2() {
+  let input = ">     code line 1";
+  let parser = new Parser(new Scanner(input))
+  console.info("### == ParserCommonTestcase2 == ###");
+  let node = parser.Parse();
+  if (node.Children?.length == 1 &&
+    node.Children[0].Token?.Name == "BlockQuote"
+  ) {
+    console.log("### TEST PASSED! ###");
+  } else {
+    console.error("### TEST FAILED! ###");
+  }
+  console.info("### == ParserCommonTestcase2 == ###");
+}
+
+function ParserCommonTestcase3() {
+  let input = ">>     code line 1";
+  let parser = new Parser(new Scanner(input))
+  console.info("### == ParserCommonTestcase3 == ###");
+  let node = parser.Parse();
+  if (node.Children?.length == 1 &&
+    node.Children[0].Token?.Name == "BlockQuote"
+  ) {
+    console.log("### TEST PASSED! ###");
+  } else {
+    console.error("### TEST FAILED! ###");
+  }
+  console.info("### == ParserCommonTestcase3 == ###");
+}
+
+
 export function ParserTestcases() {
   ParserCommonTestcase1();
+  ParserCommonTestcase2();
+  ParserCommonTestcase3();
 }

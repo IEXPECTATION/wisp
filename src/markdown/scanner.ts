@@ -1,5 +1,7 @@
 export interface Token {
-  readonly Name: string
+  readonly Name: string;
+  readonly Depth: number;
+  readonly Completed: boolean;
 }
 
 export interface HeadingToken extends Token {
@@ -14,6 +16,18 @@ export interface blockQuoteToken extends Token {
 export interface BlankLineToken extends Token {
 }
 
+export interface IndentedCodeToken extends Token {
+  Text: string;
+}
+
+export interface List extends Token {
+  SequentialNumber: number;
+}
+
+export interface ListItem extends Token {
+  Token: Token | null;
+}
+
 const TAB_SIZE = 4;
 
 export class Scanner {
@@ -22,7 +36,7 @@ export class Scanner {
   }
 
   Scan(): Token | undefined {
-    if (this.finish()) {
+    if (this.eof()) {
       return undefined;
     }
 
@@ -30,11 +44,13 @@ export class Scanner {
     let numberOfBlankChar = this.leadingBlankChar();
     if ((token = this.blankLine()) != undefined) {
       return token;
-    } else if (numberOfBlankChar < TAB_SIZE && (token = this.heading()) != undefined) {
+    } /* else if (numberOfBlankChar < TAB_SIZE && (token = this.heading()) != undefined) {
       return token;
     } else if (numberOfBlankChar < TAB_SIZE && (token = this.blockQuote()) != undefined) {
       return token;
-    }
+    } else if (numberOfBlankChar >= TAB_SIZE && (token = this.indentedCode()) != undefined) {
+      return token;
+    } */
 
     return token;
   }
@@ -48,48 +64,64 @@ export class Scanner {
       }
     }
 
-    return { Name: "BlankLine" };
+    return { Name: "BlankLine", Depth: this.depth, Completed: true };
   }
 
-  private heading(): HeadingToken | undefined {
-    let s = this.skipChar('#', 6);
-    if (s.length == 0) {
-      return undefined;
-    }
+  // private heading(): HeadingToken | undefined {
+  //   let s = this.skipChar('#', 6);
+  //   if (s.length == 0) {
+  //     return undefined;
+  //   }
 
-    if (this.peek() != ' ') {
-      return undefined;
-    }
-    this.advance();
+  //   if (this.peek() != ' ') {
+  //     return undefined;
+  //   }
+  //   this.advance();
 
-    let level = s.length;
-    s = this.skipLine();
+  //   let level = s.length;
+  //   s = this.skipLine();
 
-    return { Name: "Heading", Text: s, Level: level };
-  }
+  //   return { Name: "Heading", Text: s, Level: level };
+  // }
 
-  private blockQuote(): blockQuoteToken | undefined {
-    let s = this.skipChar('>');
-    if (s.length == 0) {
-      return undefined;
-    }
+  // private blockQuote(): blockQuoteToken | undefined {
+  //   let s = this.skipChar('>');
+  //   if (s.length == 0) {
+  //     return undefined;
+  //   }
 
-    if (this.peek() == '>') {
-      return { Name: "BlockQuote", Token: null };
-    }
+  //   if (this.peek() == '>') {
+  //     return { Name: "BlockQuote", Token: null };
+  //   }
 
-    if (this.peek() == ' ') {
-      this.advance();
-    }
+  //   if (this.peek() == ' ') {
+  //     this.advance();
+  //   }
 
-    return { Name: "BlockQuote", Token: this.Scan()! };
-  }
+  //   return { Name: "BlockQuote", Token: this.Scan()! };
+  // }
+
+  // private indentedCode(): IndentedCodeToken | undefined {
+  //   let line = "";
+  //   let numberOfBlankChar = 0;
+  //   while (true) {
+  //     line += this.skipLine();
+
+  //     numberOfBlankChar = this.leadingBlankChar();
+  //     if (numberOfBlankChar < TAB_SIZE) {
+  //       break;
+  //     }
+  //     this.retrieve(numberOfBlankChar - TAB_SIZE);
+  //   }
+
+  //   return { Name: "IndentedCode", Text: line };
+  // }
 
   // Return the number of leading blank character.
   private leadingBlankChar(): number {
     let count = 0;
     let c = undefined;
-    while ((c == this.peek()) != undefined) {
+    while ((c = this.peek()) != undefined) {
       if (c == undefined) {
         break;
       }
@@ -115,7 +147,7 @@ export class Scanner {
         break;
       }
       s += peek;
-      this.advance();
+      this.advance(skip.length);
     }
     return s;
   }
@@ -127,7 +159,7 @@ export class Scanner {
     while ((peek = this.peek(until.length)) != undefined) {
       s += peek;
       this.advance(until.length);
-      if (peek == until && count++ == repeating) {
+      if (peek == until && ++count == repeating) {
         break;
       }
     }
@@ -139,12 +171,12 @@ export class Scanner {
   }
 
   private peek(count: number = 1): string | undefined {
-    if (this.finish()) {
+    if (this.eof()) {
       return undefined;
     }
     let peek = "";
-    while (count-- > 0) {
-      peek += this.input[this.offset];
+    for (let i = 0; i < count && this.offset + i < this.input.length; i++) {
+      peek += this.input[this.offset + i];
     }
     return peek;
   }
@@ -157,12 +189,13 @@ export class Scanner {
     this.offset -= count;
   }
 
-  private finish(): boolean {
-    return this.offset == this.input.length;
+  private eof(): boolean {
+    return this.offset >= this.input.length;
   }
 
   private input: string;
   private offset: number = 0;
+  private depth: number = 0;
 }
 
 function ScannerHeadingTestcase1() {
@@ -315,6 +348,26 @@ function ScannerBlockQuoteTestcase2() {
   console.info("### == ScannerBlockQuoteTestcase2 == ###");
 }
 
+function ScannerBlockQuoteTestcase3() {
+  let input = ">      code line 1";
+  let scanner = new Scanner(input);
+  console.info("### == ScannerBlockQuoteTestcase3 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if ((token as blockQuoteToken).Name == "BlockQuote" &&
+      (token as blockQuoteToken).Token?.Name == "IndentedCode" &&
+      (((token as blockQuoteToken).Token) as IndentedCodeToken).Text == "code line 1") {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == ScannerBlockQuoteTestcase3 == ###");
+}
+
+
 function ScannerCommonTestcase1() {
   let input = "";
   let scanner = new Scanner(input);
@@ -331,7 +384,7 @@ function ScannerCommonTestcase1() {
 function ScannerBlankLineTestcase1() {
   let input = "     ";
   let scanner = new Scanner(input);
-  console.info("### == ScannerBlankLineTestcase2 == ###");
+  console.info("### == ScannerBlankLineTestcase1 == ###");
   let token = scanner.Scan();
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
@@ -342,7 +395,59 @@ function ScannerBlankLineTestcase1() {
       console.error("### TEST FAILED! ###");
     }
   }
-  console.info("### == ScannerBlankLineTestcase2 == ###");
+  console.info("### == ScannerBlankLineTestcase1 == ###");
+}
+
+function ScannerIndentedCodeTestcase1() {
+  let input = "    indented code";
+  let scanner = new Scanner(input);
+  console.info("### == ScannerIndentedCodeTestcase1 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if ((token as IndentedCodeToken).Name == "IndentedCode") {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == ScannerIndentedCodeTestcase1 == ###");
+}
+
+function ScannerIndentedCodeTestcase2() {
+  let input = "    code line 1\n    code line 2";
+  let scanner = new Scanner(input);
+  console.info("### == ScannerIndentedCodeTestcase2 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if ((token as IndentedCodeToken).Name == "IndentedCode") {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == ScannerIndentedCodeTestcase2 == ###");
+}
+
+function ScannerIndentedCodeTestcase3() {
+  let input = "    code line 1\n     code line 2";
+  let scanner = new Scanner(input);
+  console.info("### == ScannerIndentedCodeTestcase3 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if ((token as IndentedCodeToken).Name == "IndentedCode" &&
+      (token as IndentedCodeToken).Text == "code line 1\n code line 2") {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == ScannerIndentedCodeTestcase3 == ###");
 }
 
 
@@ -361,7 +466,13 @@ export function ScannerTestcases() {
   // Block quote
   ScannerBlockQuoteTestcase1();
   ScannerBlockQuoteTestcase2();
+  ScannerBlockQuoteTestcase3();
 
   // Blank Line
   ScannerBlankLineTestcase1();
+
+  // Indented Code
+  ScannerIndentedCodeTestcase1();
+  ScannerIndentedCodeTestcase2();
+  ScannerIndentedCodeTestcase3();
 }
