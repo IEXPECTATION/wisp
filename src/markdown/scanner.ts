@@ -1,34 +1,75 @@
-export interface Token {
-  readonly Name: string;
-  readonly Depth: number;
-  readonly Completed: boolean;
+export enum TokenKind {
+  BlankLine,
+  Heading,
+  Hr,
+  BlockQuote,
+  IndentedCode,
+  FencedCode,
+  Def,
+  Paragraph,
 }
+
+export interface Token {
+  readonly Kind: TokenKind;
+}
+
+export type Tokens = Token[];
 
 export interface HeadingToken extends Token {
   Text: string,
   Level: number
 }
 
-export interface blockQuoteToken extends Token {
-  Token: Token | null;
+export interface HrToken extends Token {
+}
+
+export interface BlockQuoteToken extends Token {
+  Tokens: Tokens;
 }
 
 export interface BlankLineToken extends Token {
 }
 
 export interface IndentedCodeToken extends Token {
+  Code: string;
+}
+
+export enum SupportedLanguage {
+  C,
+  CXX,
+  Java,
+  Python,
+  Rust,
+  Javascript,
+  Typescript,
+}
+
+export interface FencedCodeToen extends Token {
+  Code: string;
+  Language: string; // TODO: Change type of `Language` from string to enum.
+}
+
+export interface DefToken extends Token {
+  Label: string;
+  Url: string;
+  Title: string | undefined;
+}
+
+export interface ParagraphToken extends Token {
   Text: string;
 }
 
 export interface List extends Token {
   SequentialNumber: number;
+  Tokens: ListItem[] | undefined;
 }
 
 export interface ListItem extends Token {
-  Token: Token | null;
+  Tokens: Tokens | undefined;
 }
 
 const TAB_SIZE = 4;
+const LE = '\n';
 
 export class Scanner {
   constructor(input: string) {
@@ -41,16 +82,20 @@ export class Scanner {
     }
 
     let token = undefined;
-    let numberOfBlankChar = this.leadingBlankChar();
+    let numberOfBlankChar = this.whiteSpace();
     if ((token = this.blankLine()) != undefined) {
       return token;
-    } /* else if (numberOfBlankChar < TAB_SIZE && (token = this.heading()) != undefined) {
+    } else if (numberOfBlankChar < TAB_SIZE && (token = this.heading()) != undefined) {
       return token;
     } else if (numberOfBlankChar < TAB_SIZE && (token = this.blockQuote()) != undefined) {
       return token;
     } else if (numberOfBlankChar >= TAB_SIZE && (token = this.indentedCode()) != undefined) {
       return token;
-    } */
+    } else if (numberOfBlankChar < TAB_SIZE && (token = this.hr()) != undefined) {
+      return token;
+    } else if (numberOfBlankChar < TAB_SIZE && (token = this.fencedCode()) != undefined) {
+      return token;
+    }
 
     return token;
   }
@@ -58,67 +103,183 @@ export class Scanner {
   private blankLine(): BlankLineToken | undefined {
     let s = this.skipLine();
     for (let c of s) {
-      if (c != ' ' && c != '\t' && c != '\n') {
-        this.retrieve(s.length);
+      if (c != ' ' && c != '\t') {
+        this.retreat(s.length);
         return undefined;
       }
     }
 
-    return { Name: "BlankLine", Depth: this.depth, Completed: true };
+    return { Kind: TokenKind.BlankLine };
   }
 
-  // private heading(): HeadingToken | undefined {
-  //   let s = this.skipChar('#', 6);
-  //   if (s.length == 0) {
-  //     return undefined;
-  //   }
+  private heading(): HeadingToken | undefined {
+    let s = this.skipSince('#', 6);
+    if (s.length == 0) {
+      return undefined;
+    }
 
-  //   if (this.peek() != ' ') {
-  //     return undefined;
-  //   }
-  //   this.advance();
+    if (this.peek() != ' ') {
+      return undefined;
+    }
+    this.advance();
 
-  //   let level = s.length;
-  //   s = this.skipLine();
+    let level = s.length;
+    s = this.skipLine();
 
-  //   return { Name: "Heading", Text: s, Level: level };
-  // }
+    return { Kind: TokenKind.Heading, Text: s, Level: level };
+  }
 
-  // private blockQuote(): blockQuoteToken | undefined {
-  //   let s = this.skipChar('>');
-  //   if (s.length == 0) {
-  //     return undefined;
-  //   }
+  private hr(): HrToken | undefined {
+    let count = 0;
+    let line = this.skipLine();
+    for (let c of line) {
+      if (c == '-' || c == '_' || c == '*') {
+        count++;
+        continue;
+      }
 
-  //   if (this.peek() == '>') {
-  //     return { Name: "BlockQuote", Token: null };
-  //   }
+      if (c != '\t' && c != ' ') {
+        break;
+      }
+    }
 
-  //   if (this.peek() == ' ') {
-  //     this.advance();
-  //   }
+    if (count < 3) {
+      this.retreat(line.length);
+      return undefined;
+    }
+    return { Kind: TokenKind.Hr };
+  }
 
-  //   return { Name: "BlockQuote", Token: this.Scan()! };
-  // }
+  private blockQuote(): BlockQuoteToken | undefined {
+    let s = this.skipSince('>');
+    if (s.length == 0) {
+      return undefined;
+    }
 
-  // private indentedCode(): IndentedCodeToken | undefined {
-  //   let line = "";
-  //   let numberOfBlankChar = 0;
-  //   while (true) {
-  //     line += this.skipLine();
+    let buffer = "";
+    while (!this.eof()) {
+      buffer += this.skipLine();
 
-  //     numberOfBlankChar = this.leadingBlankChar();
-  //     if (numberOfBlankChar < TAB_SIZE) {
-  //       break;
-  //     }
-  //     this.retrieve(numberOfBlankChar - TAB_SIZE);
-  //   }
+      this.whiteSpace();
+      s = this.skipSince('>');
+      if (s.length == 0) {
+        break;
+      }
+    }
 
-  //   return { Name: "IndentedCode", Text: line };
-  // }
+    let oldInput = this.input;
+    let oldOffset = this.offset;
+    this.input = buffer;
+    this.offset = 0;
+
+    let tokens: Tokens = [];
+    while (!this.eof()) {
+      let token = this.Scan();
+      if (token == undefined) {
+        // TODO: Need a better error handling.
+        throw new Error("blockQuote: Syntax Error!");
+      }
+      tokens.push(token);
+    }
+
+    this.input = oldInput;
+    this.offset = oldOffset;
+
+    // TODO: Check if next lines is paragraph or not.
+
+    return { Kind: TokenKind.BlockQuote, Tokens: tokens };
+  }
+
+  private indentedCode(): IndentedCodeToken | undefined {
+    let line = "";
+    let numberOfBlankChar = 0;
+    while (true) {
+      line += this.skipLine();
+
+      numberOfBlankChar = this.whiteSpace();
+      if (numberOfBlankChar < TAB_SIZE) {
+        break;
+      }
+      this.retreat(numberOfBlankChar - TAB_SIZE);
+    }
+
+    return { Kind: TokenKind.IndentedCode, Code: line };
+  }
+
+  private fencedCode(): FencedCodeToen | undefined {
+    let bullet = "";
+    let begin = this.skipSince('`', this.input.length);
+    if (begin.length >= 3) {
+      bullet = '`';
+    }
+
+    if (bullet == "") {
+      begin = this.skipSince('~', this.input.length);
+      if (begin.length >= 3) {
+        bullet = '~';
+      }
+    }
+
+    if (bullet == "") {
+      return undefined;
+    }
+
+    // Recognize the language.
+    this.whiteSpace();
+    let language = this.skipLine();
+
+    let code = "";
+    let end = "";
+    while (!this.eof()) {
+      code += this.skipLine();
+
+      switch (bullet) {
+        case '`':
+          end = this.skipSince('`', this.input.length);
+          break;
+        case '~':
+          end = this.skipSince('~', this.input.length);
+      }
+
+      if (begin.length <= end.length) {
+        break;
+      }
+    }
+
+    return { Kind: TokenKind.FencedCode, Code: code, Language: language };
+  }
+
+  private def(): DefToken | undefined {
+    if (this.peek() != '[') {
+      return undefined;
+    }
+    this.advance();
+
+    let text = this.skipUntil(']');
+    if (text.length == 0) {
+      return undefined;
+    }
+
+    let label = text.substring(0, text.length - 1);
+
+    if (this.peek() != ':') {
+      return undefined;
+    }
+    this.advance();
+
+    let url = "";
+    let title = "";
+    let line = "";
+    while (!this.eof()) {
+      line = this.skipLine();
+
+    }
+
+    return { Kind: TokenKind.Def, Label: label, Url: url, Title: undefined };
+  }
 
   // Return the number of leading blank character.
-  private leadingBlankChar(): number {
+  private whiteSpace(): number {
     let count = 0;
     let c = undefined;
     while ((c = this.peek()) != undefined) {
@@ -138,36 +299,100 @@ export class Scanner {
     return count;
   }
 
-  private skipChar(skip: string, repeating: number = 1): string {
+  private skipSince(c: string, repeating: number = 1, escape: boolean = false): string {
     let peek = undefined;
     let count = 0;
     let s = "";
-    while ((peek = this.peek(skip.length)) != undefined) {
-      if (peek != skip || count++ == repeating) {
+    let inEscape = false;
+    while ((peek = this.peek()) != undefined) {
+      if (peek == '\\') {
+        inEscape = true;
+      } else {
+        if (inEscape) {
+          inEscape = false;
+        }
+      }
+
+      if (inEscape || peek != c || count++ == repeating) {
         break;
       }
+
       s += peek;
-      this.advance(skip.length);
+      this.advance();
     }
     return s;
   }
 
-  private skipUntil(until: string, repeating: number = 1): string {
+  private skipUntil(c: string, repeating: number = 1): string {
     let peek = undefined;
     let count = 0;
     let s = "";
-    while ((peek = this.peek(until.length)) != undefined) {
+    let inEscape = false;
+    while ((peek = this.peek()) != undefined) {
       s += peek;
-      this.advance(until.length);
-      if (peek == until && ++count == repeating) {
+      this.advance();
+      
+      if (peek == '\\') {
+        inEscape = true;
+      } else {
+        if (inEscape) {
+          inEscape = false;
+        }
+      }
+
+      if (!inEscape && peek == c && ++count == repeating) {
         break;
       }
     }
     return s;
   }
 
-  private skipLine(lineEnd: string = '\n'): string {
+  private skipLine(lineEnd: string = LE): string {
     return this.skipUntil(lineEnd);
+  }
+
+  private skip(c: string, escape: boolean = false): boolean {
+    let peek = this.peek(c.length);
+    if (escape && c.length == 1) {
+      if (peek == '\\') {
+        this.advance();
+        peek = this.peek();
+        if (peek == c) {
+          this.advance();
+          return true;
+        }
+        this.retreat();
+        return false;
+      }
+    }
+
+    if (peek == c) {
+      this.advance(c.length);
+      return true;
+    }
+    return false;
+  }
+
+  private skipWhere(c: string, repeating: number, escape: boolean = false): number {
+    let count = 0;
+    while (count < repeating) {
+      if (!this.skip(c, escape)) {
+        break;
+      }
+      count++;
+    }
+    return count;
+  }
+
+  private skipIf(c: string, repeating: number, escape: boolean = false): number {
+    let count = 0;
+    while (count < repeating) {
+      if (this.skip(c, escape)) {
+        break;
+      }
+      count++;
+    }
+    return count;
   }
 
   private peek(count: number = 1): string | undefined {
@@ -185,7 +410,7 @@ export class Scanner {
     this.offset += count;
   }
 
-  private retrieve(count: number = 1) {
+  private retreat(count: number = 1) {
     this.offset -= count;
   }
 
@@ -193,12 +418,88 @@ export class Scanner {
     return this.offset >= this.input.length;
   }
 
+  // Return the number of leading blank character.
+  private _whiteSpace(): number {
+    let count = 0;
+    while (!this.eof()) {
+      if (this.skip(' ')) {
+        count++;
+      } else if (this.skip('\t')) {
+        count += 4;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
+
+
+  // TODO: To be deleted.
+  _Scan(): void {
+    while (!this.eof()) {
+      this.splitBlocks();
+      console.log(this.buffer);
+    }
+  }
+
+  private _blankLine(): boolean {
+    let s = this.skipLine();
+    for (let c of s) {
+      if (c != ' ' && c != '\t') {
+        this.retreat(s.length);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private fenced(): number {
+    let skip = this.skipSince('`', this.input.length);
+    if (skip.length >= 3) {
+      this.buffer += skip;
+      return skip.length;
+    }
+
+    skip = this.skipSince(`~`, this.input.length);
+    if (skip.length >= 3) {
+      this.buffer += skip;
+      return skip.length;
+    }
+
+    return 0;
+  }
+
+  private splitBlocks() {
+    let fenced = 0;
+    while (!this.eof()) {
+      let count = this.fenced();
+
+      if (count != 0) {
+        if (fenced == 0) {
+          fenced = count;
+        } else if (fenced == count) {
+          fenced = 0;
+        }
+      }
+
+      this.buffer += this.skipLine();
+
+      if (fenced == 0 && this._blankLine()) {
+        break;
+      }
+    }
+
+    this.offset = 0;
+  }
+
+  private forecast: Token | undefined;
+  private buffer: string = "";
   private input: string;
   private offset: number = 0;
-  private depth: number = 0;
 }
 
-function ScannerHeadingTestcase1() {
+function scannerHeadingTestcase1() {
   let heading = "# heading";
   let scanner = new Scanner(heading);
   console.info("### == ScannerHeadingTestcase1 == ###");
@@ -206,7 +507,7 @@ function ScannerHeadingTestcase1() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as HeadingToken).Name == "Heading" &&
+    if ((token as HeadingToken).Kind == TokenKind.Heading &&
       (token as HeadingToken).Level == 1 &&
       (token as HeadingToken).Text == "heading") {
       console.log("### TEST PASSED! ###");
@@ -217,7 +518,7 @@ function ScannerHeadingTestcase1() {
   console.info("### == ScannerHeadingTestcase1 == ###");
 }
 
-function ScannerHeadingTestcase2() {
+function scannerHeadingTestcase2() {
   let input = "## heading";
   let scanner = new Scanner(input);
   console.info("### == ScannerHeadingTestcase2 == ###");
@@ -225,7 +526,7 @@ function ScannerHeadingTestcase2() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as HeadingToken).Name == "Heading" &&
+    if ((token as HeadingToken).Kind == TokenKind.Heading &&
       (token as HeadingToken).Level == 2 &&
       (token as HeadingToken).Text == "heading") {
       console.log("### TEST PASSED! ###");
@@ -236,7 +537,7 @@ function ScannerHeadingTestcase2() {
   console.info("### == ScannerHeadingTestcase2 == ###");
 }
 
-function ScannerHeadingTestcase3() {
+function scannerHeadingTestcase3() {
   let input = "### heading";
   let scanner = new Scanner(input);
   console.info("### == ScannerHeadingTestcase3 == ###");
@@ -244,7 +545,7 @@ function ScannerHeadingTestcase3() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as HeadingToken).Name == "Heading" &&
+    if ((token as HeadingToken).Kind == TokenKind.Heading &&
       (token as HeadingToken).Level == 3 &&
       (token as HeadingToken).Text == "heading") {
       console.log("### TEST PASSED! ###");
@@ -255,7 +556,7 @@ function ScannerHeadingTestcase3() {
   console.info("### == ScannerHeadingTestcase3 == ###");
 }
 
-function ScannerHeadingTestcase4() {
+function scannerHeadingTestcase4() {
   let input = "#### heading";
   let scanner = new Scanner(input);
   console.info("### == ScannerHeadingTestcase4 == ###");
@@ -263,7 +564,7 @@ function ScannerHeadingTestcase4() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###")
   } else {
-    if ((token as HeadingToken).Name == "Heading" &&
+    if ((token as HeadingToken).Kind == TokenKind.Heading &&
       (token as HeadingToken).Level == 4 &&
       (token as HeadingToken).Text == "heading") {
       console.log("### TEST PASSED! ###");
@@ -274,7 +575,7 @@ function ScannerHeadingTestcase4() {
   console.info("### == ScannerHeadingTestcase4 == ###");
 }
 
-function ScannerHeadingTestcase5() {
+function scannerHeadingTestcase5() {
   let input = "##### heading";
   let scanner = new Scanner(input);
   console.info("### == ScannerHeadingTestcase5 == ###");
@@ -282,7 +583,7 @@ function ScannerHeadingTestcase5() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as HeadingToken).Name == "Heading" &&
+    if ((token as HeadingToken).Kind == TokenKind.Heading &&
       (token as HeadingToken).Level == 5 &&
       (token as HeadingToken).Text == "heading") {
       console.log("### TEST PASSED! ###");
@@ -293,7 +594,7 @@ function ScannerHeadingTestcase5() {
   console.info("### == ScannerHeadingTestcase5 == ###");
 }
 
-function ScannerHeadingTestcase6() {
+function scannerHeadingTestcase6() {
   let input = "###### heading";
   let scanner = new Scanner(input);
   console.info("### == ScannerHeadingTestcase6 == ###");
@@ -301,7 +602,7 @@ function ScannerHeadingTestcase6() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as HeadingToken).Name == "Heading" &&
+    if ((token as HeadingToken).Kind == TokenKind.Heading &&
       (token as HeadingToken).Level == 6 &&
       (token as HeadingToken).Text == "heading") {
       console.log("### TEST PASSED! ###");
@@ -312,7 +613,7 @@ function ScannerHeadingTestcase6() {
   console.info("### == ScannerHeadingTestcase6 == ###");
 }
 
-function ScannerBlockQuoteTestcase1() {
+function scannerBlockQuoteTestcase1() {
   let input = "> # Heading";
   let scanner = new Scanner(input);
   console.info("### == ScannerBlockQuoteTestcase1 == ###");
@@ -320,8 +621,8 @@ function ScannerBlockQuoteTestcase1() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as blockQuoteToken).Name == "BlockQuote" &&
-      (token as blockQuoteToken).Token?.Name == "Heading") {
+    if ((token as BlockQuoteToken).Kind == TokenKind.BlockQuote &&
+      (token as BlockQuoteToken).Tokens[0].Kind == TokenKind.Heading) {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -330,7 +631,7 @@ function ScannerBlockQuoteTestcase1() {
   console.info("### == ScannerBlockQuoteTestcase1 == ###");
 }
 
-function ScannerBlockQuoteTestcase2() {
+function scannerBlockQuoteTestcase2() {
   let input = ">>";
   let scanner = new Scanner(input);
   console.info("### == ScannerBlockQuoteTestcase2 == ###");
@@ -338,8 +639,8 @@ function ScannerBlockQuoteTestcase2() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as blockQuoteToken).Name == "BlockQuote" &&
-      (token as blockQuoteToken).Token == null) {
+    if ((token as BlockQuoteToken).Kind == TokenKind.BlockQuote &&
+      (token as BlockQuoteToken).Tokens[0].Kind == TokenKind.BlockQuote) {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -348,7 +649,7 @@ function ScannerBlockQuoteTestcase2() {
   console.info("### == ScannerBlockQuoteTestcase2 == ###");
 }
 
-function ScannerBlockQuoteTestcase3() {
+function scannerBlockQuoteTestcase3() {
   let input = ">      code line 1";
   let scanner = new Scanner(input);
   console.info("### == ScannerBlockQuoteTestcase3 == ###");
@@ -356,9 +657,9 @@ function ScannerBlockQuoteTestcase3() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as blockQuoteToken).Name == "BlockQuote" &&
-      (token as blockQuoteToken).Token?.Name == "IndentedCode" &&
-      (((token as blockQuoteToken).Token) as IndentedCodeToken).Text == "code line 1") {
+    if ((token as BlockQuoteToken).Kind == TokenKind.BlockQuote &&
+      (token as BlockQuoteToken).Tokens[0].Kind == TokenKind.IndentedCode &&
+      (((token as BlockQuoteToken).Tokens[0]) as IndentedCodeToken).Code == "code line 1") {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -367,8 +668,7 @@ function ScannerBlockQuoteTestcase3() {
   console.info("### == ScannerBlockQuoteTestcase3 == ###");
 }
 
-
-function ScannerCommonTestcase1() {
+function scannerCommonTestcase1() {
   let input = "";
   let scanner = new Scanner(input);
   console.info("### == ScannerCommonTestcase1 == ###");
@@ -381,7 +681,7 @@ function ScannerCommonTestcase1() {
   console.info("### == ScannerCommonTestcase1 == ###");
 }
 
-function ScannerBlankLineTestcase1() {
+function scannerBlankLineTestcase1() {
   let input = "     ";
   let scanner = new Scanner(input);
   console.info("### == ScannerBlankLineTestcase1 == ###");
@@ -389,7 +689,7 @@ function ScannerBlankLineTestcase1() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as blockQuoteToken).Name == "BlankLine") {
+    if ((token as BlockQuoteToken).Kind == TokenKind.BlankLine) {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -398,7 +698,7 @@ function ScannerBlankLineTestcase1() {
   console.info("### == ScannerBlankLineTestcase1 == ###");
 }
 
-function ScannerIndentedCodeTestcase1() {
+function scannerIndentedCodeTestcase1() {
   let input = "    indented code";
   let scanner = new Scanner(input);
   console.info("### == ScannerIndentedCodeTestcase1 == ###");
@@ -406,7 +706,7 @@ function ScannerIndentedCodeTestcase1() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as IndentedCodeToken).Name == "IndentedCode") {
+    if ((token as IndentedCodeToken).Kind == TokenKind.IndentedCode) {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -415,7 +715,7 @@ function ScannerIndentedCodeTestcase1() {
   console.info("### == ScannerIndentedCodeTestcase1 == ###");
 }
 
-function ScannerIndentedCodeTestcase2() {
+function scannerIndentedCodeTestcase2() {
   let input = "    code line 1\n    code line 2";
   let scanner = new Scanner(input);
   console.info("### == ScannerIndentedCodeTestcase2 == ###");
@@ -423,7 +723,7 @@ function ScannerIndentedCodeTestcase2() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as IndentedCodeToken).Name == "IndentedCode") {
+    if ((token as IndentedCodeToken).Kind == TokenKind.IndentedCode) {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -432,7 +732,7 @@ function ScannerIndentedCodeTestcase2() {
   console.info("### == ScannerIndentedCodeTestcase2 == ###");
 }
 
-function ScannerIndentedCodeTestcase3() {
+function scannerIndentedCodeTestcase3() {
   let input = "    code line 1\n     code line 2";
   let scanner = new Scanner(input);
   console.info("### == ScannerIndentedCodeTestcase3 == ###");
@@ -440,8 +740,8 @@ function ScannerIndentedCodeTestcase3() {
   if (token == undefined) {
     console.error("### TEST FAILED! ###");
   } else {
-    if ((token as IndentedCodeToken).Name == "IndentedCode" &&
-      (token as IndentedCodeToken).Text == "code line 1\n code line 2") {
+    if ((token as IndentedCodeToken).Kind == TokenKind.IndentedCode &&
+      (token as IndentedCodeToken).Code == "code line 1\n code line 2") {
       console.log("### TEST PASSED! ###");
     } else {
       console.error("### TEST FAILED! ###");
@@ -450,29 +750,111 @@ function ScannerIndentedCodeTestcase3() {
   console.info("### == ScannerIndentedCodeTestcase3 == ###");
 }
 
+function scannerHrTestcase1() {
+  let input = "-- -- --";
+  let scanner = new Scanner(input);
+  console.info("### == scannerHrTestcase1 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if (token.Kind == TokenKind.Hr) {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == scannerHrTestcase1 == ###");
+}
+
+function scannerFencedCodeTestcase1() {
+  let input = "\`\`\`\nprintf(\"Hello World!\");\n\`\`\`";
+  let scanner = new Scanner(input);
+  console.info("### == scannerFencedCodeTestcase1 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if (token.Kind == TokenKind.FencedCode &&
+      (token as FencedCodeToen).Code == "printf(\"Hello World!\");\n"
+    ) {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == scannerFencedCodeTestcase1 == ###");
+}
+
+function scannerFencedCodeTestcase2() {
+  let input = "~~~\nprintf(\"Hello World!\");\n~~~~~";
+  let scanner = new Scanner(input);
+  console.info("### == scannerFencedCodeTestcase2 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if (token.Kind == TokenKind.FencedCode &&
+      (token as FencedCodeToen).Code == "printf(\"Hello World!\");\n"
+    ) {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == scannerFencedCodeTestcase2 == ###");
+}
+
+function scannerFencedCodeTestcase3() {
+  let input = "~~~ c\nprintf(\"Hello World!\");\n~~~~~";
+  let scanner = new Scanner(input);
+  console.info("### == scannerFencedCodeTestcase3 == ###");
+  let token = scanner.Scan();
+  if (token == undefined) {
+    console.error("### TEST FAILED! ###");
+  } else {
+    if (token.Kind == TokenKind.FencedCode &&
+      (token as FencedCodeToen).Code == "printf(\"Hello World!\");\n" &&
+      (token as FencedCodeToen).Language == "c\n"
+    ) {
+      console.log("### TEST PASSED! ###");
+    } else {
+      console.error("### TEST FAILED! ###");
+    }
+  }
+  console.info("### == scannerFencedCodeTestcase3 == ###");
+}
 
 export function ScannerTestcases() {
   // Common
-  ScannerCommonTestcase1();
+  scannerCommonTestcase1();
 
   // Heading
-  ScannerHeadingTestcase1();
-  ScannerHeadingTestcase2();
-  ScannerHeadingTestcase3();
-  ScannerHeadingTestcase4();
-  ScannerHeadingTestcase5();
-  ScannerHeadingTestcase6();
+  scannerHeadingTestcase1();
+  scannerHeadingTestcase2();
+  scannerHeadingTestcase3();
+  scannerHeadingTestcase4();
+  scannerHeadingTestcase5();
+  scannerHeadingTestcase6();
 
-  // Block quote
-  ScannerBlockQuoteTestcase1();
-  ScannerBlockQuoteTestcase2();
-  ScannerBlockQuoteTestcase3();
+  // Block Quote
+  scannerBlockQuoteTestcase1();
+  scannerBlockQuoteTestcase2();
+  scannerBlockQuoteTestcase3();
 
   // Blank Line
-  ScannerBlankLineTestcase1();
+  scannerBlankLineTestcase1();
 
   // Indented Code
-  ScannerIndentedCodeTestcase1();
-  ScannerIndentedCodeTestcase2();
-  ScannerIndentedCodeTestcase3();
+  scannerIndentedCodeTestcase1();
+  scannerIndentedCodeTestcase2();
+  scannerIndentedCodeTestcase3();
+
+  // Hr
+  scannerHrTestcase1();
+
+  // Fenced Code
+  scannerFencedCodeTestcase1();
+  scannerFencedCodeTestcase2();
+  scannerFencedCodeTestcase3();
 }
