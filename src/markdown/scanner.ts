@@ -319,12 +319,14 @@ export class Scanner {
     let s = "";
     let inEscape = false;
     while ((peek = this.peek()) != undefined) {
-      if (peek == '\\') {
+      if (!inEscape && peek == '\\') {
         inEscape = true;
-      } else {
-        if (inEscape) {
-          inEscape = false;
-        }
+        continue;
+      }
+
+      if (inEscape) {
+        inEscape = false;
+        continue;
       }
 
       if (inEscape || peek != c || count++ == repeating) {
@@ -346,7 +348,7 @@ export class Scanner {
       s += peek;
       this.advance();
 
-      if (peek == '\\') {
+      if (!inEscape && peek == '\\') {
         inEscape = true;
         continue;
       }
