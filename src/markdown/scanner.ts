@@ -95,6 +95,8 @@ export class Scanner {
       return token;
     } else if (numberOfBlankChar < TAB_SIZE && (token = this.fencedCode()) != undefined) {
       return token;
+    } else if (numberOfBlankChar < TAB_SIZE && (token = this.def()) != undefined) {
+      return token;
     }
 
     return token;
@@ -268,13 +270,25 @@ export class Scanner {
     this.advance();
 
     let url = "";
-    let title = "";
-    let line = "";
-    while (!this.eof()) {
-      line = this.skipLine();
+    let line = this.skipLine();
+    let leading = true;
+    for (let c of line) {
+      if (c == ' ') {
+        if (leading) {
+          continue;
+        }
+        break;
+      }
 
+      leading = false;
+      url += c;
     }
 
+    if (url == "") {
+      return undefined;
+    }
+
+    let title = "";
     return { Kind: TokenKind.Def, Label: label, Url: url, Title: undefined };
   }
 
@@ -331,16 +345,18 @@ export class Scanner {
     while ((peek = this.peek()) != undefined) {
       s += peek;
       this.advance();
-      
+
       if (peek == '\\') {
         inEscape = true;
-      } else {
-        if (inEscape) {
-          inEscape = false;
-        }
+        continue;
       }
 
-      if (!inEscape && peek == c && ++count == repeating) {
+      if (inEscape) {
+        inEscape = false;
+        continue;
+      }
+
+      if (peek == c && ++count == repeating) {
         break;
       }
     }
@@ -373,7 +389,7 @@ export class Scanner {
     return false;
   }
 
-  private skipWhere(c: string, repeating: number, escape: boolean = false): number {
+  private skipIf(c: string, repeating: number, escape: boolean = false): number {
     let count = 0;
     while (count < repeating) {
       if (!this.skip(c, escape)) {
@@ -384,7 +400,7 @@ export class Scanner {
     return count;
   }
 
-  private skipIf(c: string, repeating: number, escape: boolean = false): number {
+  private skipWhere(c: string, repeating: number, escape: boolean = false): number {
     let count = 0;
     while (count < repeating) {
       if (this.skip(c, escape)) {
@@ -858,3 +874,8 @@ export function ScannerTestcases() {
   scannerFencedCodeTestcase2();
   scannerFencedCodeTestcase3();
 }
+
+
+let input = "[abc\\]]: /url";
+let scanner = new Scanner(input);
+console.log(scanner.Scan());
