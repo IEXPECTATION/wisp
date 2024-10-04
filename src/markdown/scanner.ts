@@ -1,4 +1,5 @@
-export enum TokenKind {
+export enum Element {
+  // Blocks
   BlankLine,
   Heading,
   Hr,
@@ -7,10 +8,18 @@ export enum TokenKind {
   FencedCode,
   Def,
   Paragraph,
+  List,
+  ListItem,
+
+  // Inlines
+  Text,
+  Bold,
+  Itatic,
+
 }
 
 export interface Token {
-  readonly Kind: TokenKind;
+  readonly Kind: Element;
 }
 
 export type Tokens = Token[];
@@ -68,25 +77,18 @@ export interface ListItem extends Token {
   Tokens: Tokens | undefined;
 }
 
-export interface ParagraphToken extends Token {
-  Text: string;
-}
-
-export class ScannerConfig {
-
-}
-
 export class Scanner {
   constructor(input: string) {
+
     this.input = input;
   }
 
-  Eof() {
+  Eos() {
     return this.offset == this.input.length;
   }
 
   Peek() {
-    if (this.Eof()) {
+    if (this.Eos()) {
       return undefined;
     }
 
@@ -94,7 +96,7 @@ export class Scanner {
   }
 
   Next(count: number = 1) {
-    if (this.Eof()) {
+    if (this.Eos()) {
       return undefined;
     }
     return this.input.substring(this.offset, this.offset + count);
@@ -108,15 +110,21 @@ export class Scanner {
     this.offset -= count;
   }
 
-  BlankLine(): boolean {
+  Consume(char: string) {
+    if (this.Peek() == char) {
+      this.Advance();
+      return true;
+    }
     return false;
   }
 
-  WhiteSpace(): number {
-    return 0;
+  Anchor() {
+    this.anchor = this.offset;
   }
 
-
+  FlashBack() {
+    this.offset = this.anchor;
+  }
 
   // // TODO: To be deleted.
 
@@ -661,6 +669,7 @@ export class Scanner {
 
   private input: string;
   private offset: number = 0;
+  private anchor: number = 0;
 }
 
 // function scannerCommonTestcase1() {
@@ -677,131 +686,6 @@ export class Scanner {
 //   console.info("### == ScannerCommonTestcase1 == ###");
 // }
 
-// // Heading
-// function scannerHeadingTestcase1() {
-//   let heading = "# heading";
-//   let scanner = new Scanner(heading);
-//   console.info("### == ScannerHeadingTestcase1 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###");
-//     console.dir(token, { depth: Infinity });
-//   } else {
-//     if ((token as HeadingToken).Kind == TokenKind.Heading &&
-//       (token as HeadingToken).Level == 1 &&
-//       (token as HeadingToken).Text == "heading") {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerHeadingTestcase1 == ###");
-// }
-
-// function scannerHeadingTestcase2() {
-//   let input = "## heading";
-//   let scanner = new Scanner(input);
-//   console.info("### == ScannerHeadingTestcase2 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###");
-//     console.dir(token, { depth: Infinity });
-//   } else {
-//     if ((token as HeadingToken).Kind == TokenKind.Heading &&
-//       (token as HeadingToken).Level == 2 &&
-//       (token as HeadingToken).Text == "heading") {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerHeadingTestcase2 == ###");
-// }
-
-// function scannerHeadingTestcase3() {
-//   let input = "### heading";
-//   let scanner = new Scanner(input);
-//   console.info("### == ScannerHeadingTestcase3 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###");
-//     console.dir(token, { depth: Infinity });
-//   } else {
-//     if ((token as HeadingToken).Kind == TokenKind.Heading &&
-//       (token as HeadingToken).Level == 3 &&
-//       (token as HeadingToken).Text == "heading") {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerHeadingTestcase3 == ###");
-// }
-
-// function scannerHeadingTestcase4() {
-//   let input = "#### heading";
-//   let scanner = new Scanner(input);
-//   console.info("### == ScannerHeadingTestcase4 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###")
-//   } else {
-//     if ((token as HeadingToken).Kind == TokenKind.Heading &&
-//       (token as HeadingToken).Level == 4 &&
-//       (token as HeadingToken).Text == "heading") {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerHeadingTestcase4 == ###");
-// }
-
-// function scannerHeadingTestcase5() {
-//   let input = "##### heading";
-//   let scanner = new Scanner(input);
-//   console.info("### == ScannerHeadingTestcase5 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###");
-//     console.dir(token, { depth: Infinity });
-//   } else {
-//     if ((token as HeadingToken).Kind == TokenKind.Heading &&
-//       (token as HeadingToken).Level == 5 &&
-//       (token as HeadingToken).Text == "heading") {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerHeadingTestcase5 == ###");
-// }
-
-// function scannerHeadingTestcase6() {
-//   let input = "###### heading";
-//   let scanner = new Scanner(input);
-//   console.info("### == ScannerHeadingTestcase6 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###");
-//     console.dir(token, { depth: Infinity });
-//   } else {
-//     if ((token as HeadingToken).Kind == TokenKind.Heading &&
-//       (token as HeadingToken).Level == 6 &&
-//       (token as HeadingToken).Text == "heading") {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerHeadingTestcase6 == ###");
-// }
 
 // // Block Quote
 // function scannerBlockQuoteTestcase1() {
@@ -865,25 +749,6 @@ export class Scanner {
 //   console.info("### == ScannerBlockQuoteTestcase3 == ###");
 // }
 
-// // Blank Line
-// function scannerBlankLineTestcase1() {
-//   let input = "     ";
-//   let scanner = new Scanner(input);
-//   console.info("### == ScannerBlankLineTestcase1 == ###");
-//   let token = scanner.Scan();
-//   if (token == undefined) {
-//     console.error("### TEST FAILED! ###");
-//     console.dir(token, { depth: Infinity });
-//   } else {
-//     if ((token as BlockQuoteToken).Kind == TokenKind.BlankLine) {
-//       console.log("### TEST PASSED! ###");
-//     } else {
-//       console.error("### TEST FAILED! ###");
-//       console.dir(token, { depth: Infinity });
-//     }
-//   }
-//   console.info("### == ScannerBlankLineTestcase1 == ###");
-// }
 
 // // Indented Code
 // function scannerIndentedCodeTestcase1() {
