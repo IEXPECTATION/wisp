@@ -1,4 +1,4 @@
-import { Tokens } from "./scanner";
+import { Tokens } from "./parser";
 
 export class Renderer {
   constructor(tokens: Tokens) {
@@ -11,3 +11,14 @@ export class Renderer {
 
   private tokens: Tokens;
 }
+
+interface Render {
+  Render(): void;
+}
+
+class HTMLRender implements Render {
+  Render(): void {
+    throw new Error("Method not implemented.");
+  }
+}
+

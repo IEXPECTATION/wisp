@@ -1,4 +1,86 @@
-import { BlockQuoteToken, DefToken, FencedCodeToen, HeadingToken, IndentedCodeToken, ParagraphToken, Scanner, ScannerTestcases, Token, Element, Tokens } from "./scanner";
+import { threadId } from "worker_threads";
+import { Scanner, ScannerTestcases } from "./scanner";
+
+export enum Element {
+  // Blocks
+  BlankLine,
+  Heading,
+  Hr,
+  BlockQuote,
+  IndentedCode,
+  FencedCode,
+  Reference,
+  Paragraph,
+  List,
+  ListItem,
+
+  // Inlines
+  Text,
+  Bold,
+  Itatic,
+
+}
+
+export interface Token {
+  readonly Kind: Element;
+}
+
+export type Tokens = Token[];
+
+export interface HeadingToken extends Token {
+  Text: string,
+  Level: number
+}
+
+export interface HrToken extends Token {
+}
+
+export interface BlockQuoteToken extends Token {
+  Tokens: Tokens;
+}
+
+export interface BlankLineToken extends Token {
+}
+
+export interface IndentedCodeToken extends Token {
+  Code: string;
+}
+
+export enum SupportedLanguage {
+  C,
+  CXX,
+  Java,
+  Python,
+  Rust,
+  Javascript,
+  Typescript,
+}
+
+export interface FencedCodeToen extends Token {
+  Code: string;
+  Language: string; // TODO: Change type of `Language` from string to enum.
+}
+
+export interface RefenrenceToken extends Token {
+  Label: string;
+  Url: string;
+  Title: string | undefined;
+  Raw: string,
+  Completed: boolean;
+}
+
+export interface ParagraphToken extends Token {
+  Text: string;
+}
+
+export interface ListToken extends Token {
+  SequentialNumber: number;
+  Tokens: ListItemToken[];
+}
+
+export interface ListItemToken extends Token {
+  Tokens: Tokens;
+}
 
 export interface PasrerConfig {
   EOL?: string;
@@ -34,14 +116,6 @@ export class Parser {
     return this.parse(scanner);
   }
 
-  _Parse(input: string) {
-    let scanner = new Scanner(input);
-    let tokens = this.parse(scanner);
-    let nodes = [] as Nodes;
-    this.walk(nodes, tokens, () => { });
-    return nodes;
-  }
-
   private parse(scanner: Scanner) {
     let tokens: Tokens = [];
     while (!scanner.Eos()) {
@@ -53,7 +127,7 @@ export class Parser {
       if (whitespace >= TAB_SIZE) {
         if (this.indentedCode(tokens, scanner)) {
           let el = tokens[tokens.length - 1];
-          //  If the number of whitespace is larger than TAB_SIZE, we should add the extra whitespace to Code.
+          //  If the number of whitespace is larger than TAB_SIZE, we should add the extra whitespace to code for first line.
           (el as IndentedCodeToken).Code = " ".repeat(whitespace - TAB_SIZE) + (el as IndentedCodeToken).Code;
           continue;
         }
@@ -76,7 +150,7 @@ export class Parser {
         continue;
       }
 
-      if (this.def(tokens, scanner)) {
+      if (this.reference(tokens, scanner)) {
         continue;
       }
 
@@ -106,8 +180,11 @@ export class Parser {
       }
     }
 
-    tokens.push({ Kind: Element.BlankLine });
+    tokens.push({
+      Kind: Element.BlankLine
+    });
     return true;
+
   }
 
   private headingLevel(scanner: Scanner) {
@@ -146,29 +223,8 @@ export class Parser {
   }
 
   private blockQuote(tokens: Tokens, scanner: Scanner) {
+    // TODO: needs refactor.
     let previous = 0;
-    let blockquote: BlockQuoteToken = { Kind: Element.BlockQuote, Tokens: [] };
-    let depth = 0;
-    let maxDepth = 1;
-    let blockquotes = [];
-    blockquotes.push(blockquote);
-
-    let mergeBlockQuotes = function (tokens: Tokens) {
-      while (maxDepth < depth) {
-        // TODO: Insert a new blockquote with tokens inside the current blockquote.
-        let newBlockquote: BlockQuoteToken = { Kind: Element.BlockQuote, Tokens: [] };
-
-        blockquotes[maxDepth - 1].Tokens.push(newBlockquote);
-        maxDepth += 1;
-
-        blockquotes.push(newBlockquote);
-      }
-
-      for (let token of tokens) {
-        blockquotes[depth - 1].Tokens.push(token);
-      }
-    }
-
     while (scanner.Consume('>')) {
       previous++;
     }
@@ -177,84 +233,87 @@ export class Parser {
       return false;
     }
 
-    while (true) {
-      let chunk = "";
-      let prefix = 0;
-      while (!scanner.Eos()) {
-        scanner.Consume(' ');
+    scanner.Consume(' ');
 
-        while (!this.eol(scanner)) {
-          chunk += scanner.Peek();
-          scanner.Advance();
-        }
-
-        // TODO: Push a eol back to text.
-        chunk += EOL;
-
-        while (scanner.Consume('>')) {
-          prefix++;
-        }
-
-        if (previous != prefix) {
-          depth = previous;
-          previous = prefix;
-          break;
-        }
-        prefix = 0;
+    let getPreviousBlockquote = (targets: Tokens): BlockQuoteToken | null => {
+      if (targets.length == 0) {
+        return null;
       }
 
-      if (chunk == "") {
-        break;
+      let last = targets[targets.length - 1];
+      if (last.Kind == Element.BlockQuote) {
+        return last as BlockQuoteToken;
+      } else if (last.Kind == Element.List) {
+        return getPreviousBlockquote((last as ListToken).Tokens);
+      } else if (last.Kind == Element.ListItem) {
+        return getPreviousBlockquote((last as ListItemToken).Tokens);
       }
 
-      let subTokens = this.parse(new Scanner(chunk));
-      if (subTokens.length == 0) {
-        // TODO: Throw an error.
-        return false;
-      }
-
-      mergeBlockQuotes(subTokens);
-
-      if (subTokens[subTokens.length - 1].Kind == Element.Paragraph) {
-        let nextTokens = [] as Tokens;
-        // TODO: It may exist a stack overflow in here.
-        if (this.paragraph(nextTokens, scanner)) {
-          (subTokens[subTokens.length - 1] as ParagraphToken).Text += (nextTokens[0] as ParagraphToken).Text;
-
-          let nextToken = nextTokens[1];
-          if (nextToken && nextToken.Kind == Element.BlockQuote) {
-            for (let el of (nextToken as BlockQuoteToken).Tokens) {
-              blockquote.Tokens.push(el);
-            }
-          }
-          continue;
-        }
-
-        break;
-      }
-
-      if (prefix == 0) {
-        break;
-      }
+      return null;
     }
 
-    tokens.push(blockquote);
+    let previousBlockQuote = getPreviousBlockquote(tokens);
+
+    if (previousBlockQuote == null) {
+      previousBlockQuote = { Kind: Element.BlockQuote, Tokens: [] };
+      tokens.push(previousBlockQuote);
+    }
+
+    for (let i = 0; i < previous - 1; i++) {
+      if (previousBlockQuote.Tokens.length > 0) {
+        let last = previousBlockQuote.Tokens[previousBlockQuote.Tokens.length - 1];
+        if (last.Kind == Element.BlockQuote) {
+          previousBlockQuote = last as BlockQuoteToken;
+        }
+      }
+
+      let blockquote: BlockQuoteToken = { Kind: Element.BlockQuote, Tokens: [] };
+      previousBlockQuote.Tokens.push(blockquote);
+      previousBlockQuote = blockquote;
+    }
+
+    let chunk = "";
+    let prefix = 0;
+    while (!scanner.Eos()) {
+      while (!this.eol(scanner)) {
+        chunk += scanner.Peek();
+        scanner.Advance();
+      }
+      chunk += EOL;
+      while (scanner.Consume('>')) {
+        prefix++;
+      }
+
+      if (prefix != previous) {
+        scanner.Retreat(prefix);
+        break;
+      }
+      prefix = 0;
+    }
+
+    let subTokens = this.parse(new Scanner(chunk));
+    if (subTokens.length == 0) {
+      // TODO: Throw an error.
+      return false;
+    }
+
+    for (let subToken of subTokens) {
+      previousBlockQuote.Tokens.push(subToken);
+    }
+
     return true;
   }
 
   private indentedCode(tokens: Tokens, scanner: Scanner) {
     let line = "";
     let whitespace = 0;
+
     while (!scanner.Eos()) {
       while (!this.eol(scanner)) {
         line += scanner.Peek();
         scanner.Advance();
       }
-
-      // TODO: Push a eol back to line.
-      if (!scanner.Eos()) {
-        line += EOL;
-      }
+      line += EOL;
 
       whitespace = this.whiteSpace(scanner);
       if (whitespace < TAB_SIZE) {
@@ -273,6 +332,7 @@ export class Parser {
   private hr(tokens: Tokens, scanner: Scanner) {
     scanner.Anchor();
     let count = 0;
+
     while (!this.eol(scanner)) {
       if (scanner.Consume('*') ||
         scanner.Consume('-') ||
@@ -311,16 +371,19 @@ export class Parser {
 
     let startCount = 1;
     let eol = true;
+
     while (!this.eol(scanner)) {
       if (scanner.Consume(bullet)) {
         startCount++;
-      } else {
+      } else if (eol) {
         eol = false;
         break;
+      } else {
+        console.assert(0, "This line should not be reached.")
       }
     }
 
-    if (startCount < 3) {
+    if (startCount < 3 || scanner.Eos()) {
       scanner.FlashBack();
       return false;
     }
@@ -331,11 +394,11 @@ export class Parser {
       this.whiteSpace(scanner);
       while (!this.eol(scanner)) {
         let peek = scanner.Peek();
-        if (peek == '\t' || peek == ' ') {
-          break;
+        if (peek == ' ' || peek == '\t') {
+          continue;
         }
 
-        language += scanner.Peek();
+        language += peek;
         scanner.Advance();
       }
     }
@@ -363,7 +426,28 @@ export class Parser {
     return false;
   }
 
-  private def(tokens: Tokens, scanner: Scanner) {
+  private reference(tokens: Tokens, scanner: Scanner) {
+    // TODO: Needs refarctor
+    if (tokens.length >= 1) {
+      let last = tokens[tokens.length - 1];
+      if (last.Kind == Element.Paragraph) {
+        return false;
+      } else if (last.Kind == Element.Reference) {
+        let element = last as RefenrenceToken;
+        if (element.Url == "") {
+          // TODO: Skip the white space,
+          // and add this line as url
+        }
+
+        if (!element.Completed) {
+          // TODO: verify this line which a end of title.
+        }
+
+        return true;
+      }
+    }
+
+    let raw = "";
     scanner.Anchor();
     if (!scanner.Consume('[')) {
       return false;
@@ -371,16 +455,24 @@ export class Parser {
 
     let label = "";
     while (!scanner.Consume(']')) {
-      if (scanner.Peek() == '\\') {
-        label += scanner.Peek();
+      let peek = scanner.Peek();
+      if (peek == '\\') {
+        label += peek;
         scanner.Advance();
+        peek = scanner.Peek();
       }
 
-      label += scanner.Peek();
+      if (peek == '\n') {
+        scanner.FlashBack();
+        return false;
+      }
+
+      label += peek;
       scanner.Advance();
 
       if (scanner.Eos()) {
-        break;
+        scanner.FlashBack();
+        return false;
       }
     }
 
@@ -389,102 +481,75 @@ export class Parser {
       return false;
     }
 
+    raw = '[' + label + ']:'
+    while (!this.eol(scanner)) {
+      let peek = scanner.Peek();
+      scanner.Advance();
+      raw += peek;
+
+      if (peek == ' ' || peek == '\t') {
+        break;
+      }
+    }
+
     let url = "";
-    this.whiteSpace(scanner); // Skip the white spaces.
-    // The url may at the same line of label.
     while (!this.eol(scanner)) {
       let peek = scanner.Peek();
       if (peek == ' ' || peek == '\t') {
         break;
       }
 
-      url += scanner.Peek();
+      raw += peek;
+      url += peek;
       scanner.Advance();
     }
 
-    // If url is not at previous line. it may at current line.
     if (url == "") {
-      this.whiteSpace(scanner); // Skip the white spaces.
-      while (!this.eol(scanner)) {
-        let peek = scanner.Peek();
-        if (peek == ' ' || peek == '\t') {
-          break;
-        }
-
-        url += peek;
-        scanner.Advance();
-      }
-
-      if (url == "") {
-        scanner.FlashBack();
-        return false;
-      }
+      tokens.push({ Kind: Element.Reference, Url: url, Title: "", Raw: raw, Completed: false } as RefenrenceToken)
+      return true;
     }
 
-    let title = "";
-    let inQuote = false;
-    this.whiteSpace(scanner); // Skip the white spaces.
     while (!this.eol(scanner)) {
-      if (!inQuote && (scanner.Peek() == '\"' || scanner.Peek() == '\'')) {
-        inQuote = true;
-        scanner.Advance();
-        continue;
-      }
+      let peek = scanner.Peek();
+      scanner.Advance();
+      raw += peek;
 
-      if (inQuote && (scanner.Peek() == '\"' || scanner.Peek() == '\'')) {
-        inQuote = false;
+      if (peek == ' ' || peek == '\t') {
         break;
       }
+    }
 
-      title += scanner.Peek();
+    // The title is optional.
+    let title = "";
+    let completed = true;
+    let peek = scanner.Peek();
+
+    if (!this.eol(scanner) && peek != '\"' && peek != '\'') {
+      return false;
+    }
+
+    let bullet = peek;
+    scanner.Advance();
+    peek = scanner.Peek();
+    while (peek != bullet) {
+      title += peek;
       scanner.Advance();
+      peek = scanner.Peek();
+
+      if (this.eol(scanner)) {
+        completed = false;
+        break;
+      }
     }
 
-    if (inQuote) {
-      title += EOL;
-      while (scanner.Peek() != '\"' && scanner.Peek() != '\'') {
-        if (scanner.Peek() == '\\') {
-          label += scanner.Peek();
-          scanner.Advance();
-        }
-
-        title += scanner.Peek();
-        scanner.Advance();
-
-        if (scanner.Eos()) {
-          break;
-        }
-      }
+    if (completed) {
+      scanner.Advance();
+      raw += bullet + title + bullet;
     } else {
-      if (title == "") {
-        // Search in next line.
-        this.whiteSpace(scanner);
-        while (!this.eol(scanner)) {
-          if (scanner.Peek() == '\"' || scanner.Peek() == '\'') {
-            inQuote = true;
-          }
-        }
-
-        if (inQuote) {
-          title += EOL;
-          while (scanner.Peek() != '\"' && scanner.Peek() != '\'') {
-            if (scanner.Peek() == '\\') {
-              label += scanner.Peek();
-              scanner.Advance();
-            }
-
-            title += scanner.Peek();
-            scanner.Advance();
-
-            if (scanner.Eos()) {
-              break;
-            }
-          }
-        }
-      }
+      raw += bullet + title;
     }
 
-    tokens.push({ Kind: Element.Def, Label: label, Url: url, Title: title } as DefToken);
+    tokens.push({ Kind: Element.Reference, Url: url, Title: title, Raw: raw, Completed: completed } as RefenrenceToken)
     return true;
   }
 
@@ -509,58 +574,49 @@ export class Parser {
   }
 
   private paragraph(tokens: Tokens, scanner: Scanner) {
-    let nextTokens = [] as Tokens;
     let text = "";
-    while (!scanner.Eos()) {
-      while (!this.eol(scanner)) {
-        text += scanner.Peek();
-        scanner.Advance();
+
+    while (!this.eol(scanner)) {
+      text += scanner.Peek();
+      scanner.Advance();
+    }
+    text += EOL;
+
+    let getLastParagraph = (targets: Tokens): ParagraphToken | null => {
+      if (targets.length == 0) {
+        return null;
       }
 
-      // TODO: Push a eol back to text.
-      text += EOL;
-
-      // Check if the next line is still a paragraph.
-      if (this.blankline(nextTokens, scanner)) {
-        break;
+      let last = targets[targets.length - 1];
+      if (last.Kind == Element.Paragraph) {
+        return last as ParagraphToken;
+      } else if (last.Kind == Element.BlockQuote) {
+        return getLastParagraph((last as BlockQuoteToken).Tokens);
+      } else if (last.Kind == Element.List) {
+        return getLastParagraph((last as ListToken).Tokens);
+      } else if (last.Kind == Element.ListItem) {
+        return getLastParagraph((last as ListItemToken).Tokens);
       }
 
-      if (this.heading(nextTokens, scanner)) {
-        break;
-      }
-
-      if (this.blockQuote(nextTokens, scanner)) {
-        break;
-      }
-
-      if (this.fencedCode(nextTokens, scanner)) {
-        break;
-      }
-
-      if (this.def(nextTokens, scanner)) {
-        break;
-      }
-
-      let whitespace = this.whiteSpace(scanner);
-      if (whitespace >= TAB_SIZE) {
-        scanner.Retreat(whitespace);
-        break;
-      }
-
-      let level = this.setextHeading(scanner);
-      if (level != 0) {
-        tokens.push({ Kind: Element.Heading, Text: text, Level: level } as HeadingToken);
-        return true;
-      }
+      return null;
     }
 
-    if (text == "") {
-      return false;
+    let last = getLastParagraph(tokens);
+
+    let level = this.setextHeading(scanner);
+    if (level != 0) {
+      if (last) {
+        text = (last as ParagraphToken).Text + text;
+        tokens.pop();
+      }
+
+      tokens.push({ Kind: Element.Heading, Level: level, Text: text } as HeadingToken);
     }
 
-    tokens.push({ Kind: Element.Paragraph, Text: text } as ParagraphToken);
-    if (nextTokens.length != 0) {
-      tokens.push(nextTokens[0]);
+    if (last) {
+      (last as ParagraphToken).Text += text;
+    } else {
+      tokens.push({ Kind: Element.Paragraph, Text: text } as ParagraphToken);
     }
 
     return true;
@@ -572,10 +628,6 @@ export class Parser {
 
   private listItem(tokens: Tokens, scanner: Scanner) {
     // TODO: Not Implement!
-  }
-
-  private terminate(element: Element, scanner: number) {
-
   }
 
   private eol(scanner: Scanner) {
@@ -979,10 +1031,10 @@ function parserDefTestcase1() {
     console.error("### TEST FAILED! ###");
     console.dir(tokens, { depth: Infinity });
   } else {
-    if (tokens[0].Kind == Element.Def &&
-      (tokens[0] as DefToken).Label == "foo" &&
-      (tokens[0] as DefToken).Url == "/url" &&
-      (tokens[0] as DefToken).Title == "title"
+    if (tokens[0].Kind == Element.Reference &&
+      (tokens[0] as RefenrenceToken).Label == "foo" &&
+      (tokens[0] as RefenrenceToken).Url == "/url" &&
+      (tokens[0] as RefenrenceToken).Title == "title"
     ) {
       console.log("### TEST PASSED! ###");
     } else {
@@ -1002,10 +1054,10 @@ function parserDefTestcase2() {
     console.error("### TEST FAILED! ###");
     console.dir(tokens, { depth: Infinity });
   } else {
-    if (tokens[0].Kind == Element.Def &&
-      (tokens[0] as DefToken).Label == "foo" &&
-      (tokens[0] as DefToken).Url == "/url" &&
-      (tokens[0] as DefToken).Title == ""
+    if (tokens[0].Kind == Element.Reference &&
+      (tokens[0] as RefenrenceToken).Label == "foo" &&
+      (tokens[0] as RefenrenceToken).Url == "/url" &&
+      (tokens[0] as RefenrenceToken).Title == ""
     ) {
       console.log("### TEST PASSED! ###");
     } else {
@@ -1025,10 +1077,10 @@ function parserDefTestcase3() {
     console.error("### TEST FAILED! ###");
     console.dir(tokens, { depth: Infinity });
   } else {
-    if (tokens[0].Kind == Element.Def &&
-      (tokens[0] as DefToken).Label == "foo" &&
-      (tokens[0] as DefToken).Url == "/url" &&
-      (tokens[0] as DefToken).Title == "\ntitle\nline1\nline2\n"
+    if (tokens[0].Kind == Element.Reference &&
+      (tokens[0] as RefenrenceToken).Label == "foo" &&
+      (tokens[0] as RefenrenceToken).Url == "/url" &&
+      (tokens[0] as RefenrenceToken).Title == "\ntitle\nline1\nline2\n"
     ) {
       console.log("### TEST PASSED! ###");
     } else {
@@ -1152,62 +1204,66 @@ export function ParserTestcases() {
   ParserCommonTestcase1();
 }
 
-
+// let input = `
+// > line 1
+// line 1 continuation text
+// > line 2
+// line 2 continuation text
+// > line 3
+// line 3 continuation text
+// > line 4
+// line 4 continuation text
+// > line 5
+// line 5 continuation text
+// > line 6
+// line 6 continuation text
+// > line 7
+// line 7 continuation text
+// > line 8
+// line 8 continuation text
+// > line 9
+// line 9 continuation text
+// > line 10
+// line 10 continuation text
+// > line 11
+// line 11 continuation text
+// > line 12
+// line 12 continuation text
+// > line 13
+// line 13 continuation text
+// > line 13
+// line 13 continuation text
+// > line 14
+// line 14 continuation text
+// > line 14
+// line 14 continuation text
+// > line 15
+// line 15 continuation text
+// > line 16
+// line 16 continuation text
+// > line 17
+// line 17 continuation text
+// > line 18
+// line 18 continuation text
+// > line 19
+// line 19 continuation text
+// > line 20
+// line 20 continuation text
+// > line 21
+// line 21 continuation text
+// > line 22
+// line 22 continuation text
+// > line 23
+// line 23 continuation text
+// > line 24
+// line 24 continuation text
+// > line 25
+// line 25 continuation text
+// `;
 let input = `
-> line 1
-line 1 continuation text
-> line 2
-line 2 continuation text
-> line 3
-line 3 continuation text
-> line 4
-line 4 continuation text
-> line 5
-line 5 continuation text
-> line 6
-line 6 continuation text
-> line 7
-line 7 continuation text
-> line 8
-line 8 continuation text
-> line 9
-line 9 continuation text
-> line 10
-line 10 continuation text
-> line 11
-line 11 continuation text
-> line 12
-line 12 continuation text
-> line 13
-line 13 continuation text
-> line 13
-line 13 continuation text
-> line 14
-line 14 continuation text
-> line 14
-line 14 continuation text
-> line 15
-line 15 continuation text
-> line 16
-line 16 continuation text
-> line 17
-line 17 continuation text
-> line 18
-line 18 continuation text
-> line 19
-line 19 continuation text
-> line 20
-line 20 continuation text
-> line 21
-line 21 continuation text
-> line 22
-line 22 continuation text
-> line 23
-line 23 continuation text
-> line 24
-line 24 continuation text
-> line 25
-line 25 continuation text
+[title]: /url "title
+
+"
 `;
 let parser = new Parser({});
 let tokens = parser.Parse(input);

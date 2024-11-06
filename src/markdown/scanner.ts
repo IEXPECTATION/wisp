@@ -1,81 +1,3 @@
-export enum Element {
-  // Blocks
-  BlankLine,
-  Heading,
-  Hr,
-  BlockQuote,
-  IndentedCode,
-  FencedCode,
-  Def,
-  Paragraph,
-  List,
-  ListItem,
-
-  // Inlines
-  Text,
-  Bold,
-  Itatic,
-
-}
-
-export interface Token {
-  readonly Kind: Element;
-}
-
-export type Tokens = Token[];
-
-export interface HeadingToken extends Token {
-  Text: string,
-  Level: number
-}
-
-export interface HrToken extends Token {
-}
-
-export interface BlockQuoteToken extends Token {
-  Tokens: Tokens;
-}
-
-export interface BlankLineToken extends Token {
-}
-
-export interface IndentedCodeToken extends Token {
-  Code: string;
-}
-
-export enum SupportedLanguage {
-  C,
-  CXX,
-  Java,
-  Python,
-  Rust,
-  Javascript,
-  Typescript,
-}
-
-export interface FencedCodeToen extends Token {
-  Code: string;
-  Language: string; // TODO: Change type of `Language` from string to enum.
-}
-
-export interface DefToken extends Token {
-  Label: string;
-  Url: string;
-  Title: string | undefined;
-}
-
-export interface ParagraphToken extends Token {
-  Text: string;
-}
-
-export interface List extends Token {
-  SequentialNumber: number;
-  Tokens: ListItem[] | undefined;
-}
-
-export interface ListItem extends Token {
-  Tokens: Tokens | undefined;
-}
 
 export class Scanner {
   constructor(input: string) {
@@ -98,7 +20,10 @@ export class Scanner {
     if (this.Eos()) {
       return undefined;
     }
-    return this.input.substring(this.offset, this.offset + count);
+
+    let next = this.input.substring(this.offset, this.offset + count);
+    this.offset += count;
+    return next;
   }
 
   Advance(count: number = 1) {
