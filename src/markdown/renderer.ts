@@ -1,15 +1,32 @@
-import { Tokens } from "./parser";
+import { Node, NodeTag } from "./nodes";
 
 export class Renderer {
-  constructor(tokens: Tokens) {
-    this.tokens = tokens;
-  }
 
-  Render() {
+  Render(root: Node) {
 
   }
 
-  private tokens: Tokens;
+  private visitor(target: Node) {
+    this.entryNode(target.Tag);
+
+    for (let node of target.Children()) {
+      this.visitor(node);
+    }
+
+    this.leaveNode(target.Tag);
+  }
+
+  private entryNode(tag: NodeTag) {
+    switch (tag) {
+
+    }
+  }
+
+  private leaveNode(tag: NodeTag) {
+    switch (tag) {
+
+    }
+  }
 }
 
 interface Render {

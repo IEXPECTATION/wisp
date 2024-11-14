@@ -1,86 +1,6 @@
-import { threadId } from "worker_threads";
-import { Scanner, ScannerTestcases } from "./scanner";
-
-export enum Element {
-  // Blocks
-  BlankLine,
-  Heading,
-  Hr,
-  BlockQuote,
-  IndentedCode,
-  FencedCode,
-  Reference,
-  Paragraph,
-  List,
-  ListItem,
-
-  // Inlines
-  Text,
-  Bold,
-  Itatic,
-
-}
-
-export interface Token {
-  readonly Kind: Element;
-}
-
-export type Tokens = Token[];
-
-export interface HeadingToken extends Token {
-  Text: string,
-  Level: number
-}
-
-export interface HrToken extends Token {
-}
-
-export interface BlockQuoteToken extends Token {
-  Tokens: Tokens;
-}
-
-export interface BlankLineToken extends Token {
-}
-
-export interface IndentedCodeToken extends Token {
-  Code: string;
-}
-
-export enum SupportedLanguage {
-  C,
-  CXX,
-  Java,
-  Python,
-  Rust,
-  Javascript,
-  Typescript,
-}
-
-export interface FencedCodeToen extends Token {
-  Code: string;
-  Language: string; // TODO: Change type of `Language` from string to enum.
-}
-
-export interface RefenrenceToken extends Token {
-  Label: string;
-  Url: string;
-  Title: string | undefined;
-  Raw: string,
-  Completed: boolean;
-}
-
-export interface ParagraphToken extends Token {
-  Text: string;
-}
-
-export interface ListToken extends Token {
-  SequentialNumber: number;
-  Tokens: ListItemToken[];
-}
-
-export interface ListItemToken extends Token {
-  Tokens: Tokens;
-}
+import { Scanner } from "./scanner";
+import { BlockQuoteToken, FencedCodeToen, HeadingToken, IndentedCodeToken, ListItemToken, ListToken, ParagraphToken, ReferenceToken, Token, TokenKind, Tokens } from "./tokens";
+import { Node, Nodes, NodeTag } from "./nodes";
 
 export interface PasrerConfig {
   EOL?: string;
@@ -89,18 +9,6 @@ export interface PasrerConfig {
 
 export function MakeDefaultParserConfig() {
 
-}
-
-type Node = Token;
-type Nodes = Node[];
-
-export interface Inline extends Node {
-  Text: string
-}
-
-export interface HeadingNode extends Node {
-  Level: number;
-  Nodes: Nodes;
 }
 
 const TAB_SIZE = 4;
@@ -113,10 +21,13 @@ export class Parser {
 
   Parse(input: string) {
     let scanner = new Scanner(input);
-    return this.parse(scanner);
+    let tokens = this.parseBlocks(scanner);
+    let document = new Node(NodeTag.Document);
+    this.parseInlines(document, tokens);
+    return document;
   }
 
-  private parse(scanner: Scanner) {
+  private parseBlocks(scanner: Scanner) {
     let tokens: Tokens = [];
     while (!scanner.Eos()) {
       if (this.blankline(tokens, scanner)) {
@@ -161,10 +72,212 @@ export class Parser {
     return tokens;
   }
 
-  private walk(nodes: Nodes, tokens: Tokens, visitor: (nodes: Nodes, token: Token) => void) {
-    for (let token of tokens) {
-      visitor(nodes, token);
+  private parseInlines(root: Node, targets: Tokens) {
+    for (let token of targets) {
+      this.inlines(root, token);
     }
+  }
+
+  private inlines(root: Node, target: Token) {
+    switch (target.Kind) {
+      case TokenKind.BlankLine:
+        return;
+
+      case TokenKind.Heading: {
+
+        let heading = undefined;
+        let token = target as HeadingToken;
+        switch (token.Level) {
+          case 1:
+            heading = new Node(NodeTag.H1);
+            break;
+          case 2:
+            heading = new Node(NodeTag.H2);
+            break;
+          case 3:
+            heading = new Node(NodeTag.H3);
+            break;
+          case 4:
+            heading = new Node(NodeTag.H4);
+            break;
+          case 5:
+            heading = new Node(NodeTag.H5);
+            break;
+          case 6:
+            heading = new Node(NodeTag.H6);
+            break;
+          default:
+            throw new Error("Unknown heading level!");
+        }
+        this.inline(heading, token.Text);
+        root.SetChild(heading);
+      }
+        return;
+
+      case TokenKind.Hr: {
+        let hr = new Node(NodeTag.Hr);
+        root.SetChild(hr);
+      }
+        return;
+
+      case TokenKind.BlockQuote: {
+        let blockquote = new Node(NodeTag.BlockQuote);
+        this.parseInlines(blockquote, (target as BlockQuoteToken).Tokens);
+        root.SetChild(blockquote);
+      }
+        return;
+
+      case TokenKind.IndentedCode:
+      case TokenKind.FencedCode: {
+        let code = new Node(NodeTag.Code);
+        this.inline(code, (target as IndentedCodeToken).Code);
+        root.SetChild(code);
+      }
+        return;
+
+      case TokenKind.Reference: {
+        let token = target as ReferenceToken;
+        if (token.Completed) {
+
+          return;
+        }
+
+        let paragraph = new Node(NodeTag.Paragraph);
+        this.inline(paragraph, (target as ParagraphToken).Text);
+        root.SetChild(paragraph);
+      }
+        return;
+
+      case TokenKind.Paragraph: {
+        let paragraph = new Node(NodeTag.Paragraph);
+        this.inline(paragraph, (target as ParagraphToken).Text);
+        root.SetChild(paragraph);
+      }
+        return;
+
+      case TokenKind.List:
+        return;
+
+      case TokenKind.ListItem:
+        return;
+
+      default:
+        throw new Error("Unknow TokenKind!");
+    }
+  }
+
+  private inline(root: Node, text: string) {
+    let context = {
+      index: 0,
+      text
+    };
+    while (context.index < text.length) {
+      if (this.codeSpan(root, context)) {
+        continue;
+      }
+
+      if (this.text(root, context)) {
+        continue;
+      }
+
+
+    }
+  }
+
+  private codeSpan(root: Node, context: { index: number, text: string }) {
+    let { index, text } = context;
+    if (text[index] != '`') {
+      return false;
+    }
+
+
+    context.index = index;
+    return true;
+  }
+
+  private softbreak(root: Node, context: { index: number, text: string }) {
+
+  }
+
+  private text(root: Node, context: { index: number, text: string }) {
+    // let children = root.Children();
+    // if (children.length == 0 || children[children.length - 1].Tag != NodeTag.Text) {
+    //   let text = new Node(NodeTag.Text);
+    //   text.SetText(c);
+    //   root.SetChild(text);
+    //   return;
+    // }
+
+    // let text = children[children.length - 1];
+    // text.SetText(text.Text() + c);
+    return false;
+  }
+
+  private emphasis(root: Node, index: number, text: string) {
+    let bullet = text[index];
+    let start = 0;
+    let i = index
+    while (text[i] == bullet) {
+      i += 1;
+      start += 1;
+    }
+
+    if (start > 3) {
+      // TODO: This may a empty emphasis.
+    }
+
+    if (bullet == '_') {
+      if (text[i + 1] == ' ') {
+        i += 1;
+      } else {
+        return index;
+      }
+    }
+
+    let emphasis = "";
+    let anthor = 0;
+    let end = 0;
+    while (i < text.length) {
+      if (bullet == '_') {
+        anthor = i;
+        while (text[anthor] == ' ' && text[i + 1] == '_') {
+          i += 1;
+          end += 1;
+        }
+
+        if (end != start) {
+          i = anthor;
+        } else {
+          let em = new Node(NodeTag.Block + end - 1);
+          em.SetText(emphasis);
+          root.SetChild(em);
+          return i;
+        }
+      }
+
+      if (bullet == '*') {
+        anthor = i;
+        while (text[i] == '*') {
+          i += 1;
+          end += 1;
+        }
+
+        if (end != start) {
+          i = anthor;
+        } else {
+          let em = new Node(NodeTag.Block + end - 1);
+          em.SetText(emphasis);
+          root.SetChild(em);
+          return i;
+        }
+      }
+
+      emphasis += text[i];
+      i += 1;
+      end = 0;
+    }
+
+    return index;
   }
 
   private blankline(tokens: Tokens, scanner: Scanner) {
@@ -181,7 +294,7 @@ export class Parser {
     }
 
     tokens.push({
-      Kind: Element.BlankLine
+      Kind: TokenKind.BlankLine
     });
     return true;
 
@@ -191,7 +304,7 @@ export class Parser {
     let count = 0;
     while (count <= 6) {
       if (scanner.Consume('#')) {
-        count++;
+        count += 1;
       } else {
         break;
       }
@@ -218,56 +331,55 @@ export class Parser {
       scanner.Advance();
     }
 
-    tokens.push({ Kind: Element.Heading, Text: text, Level: level } as HeadingToken)
+    tokens.push({ Kind: TokenKind.Heading, Text: text, Level: level } as HeadingToken)
     return true;
   }
 
-  private blockQuote(tokens: Tokens, scanner: Scanner) {
-    // TODO: needs refactor.
-    let previous = 0;
-    while (scanner.Consume('>')) {
-      previous++;
+  private getPreviousBlockquote(targets: Tokens): BlockQuoteToken | null {
+    if (targets.length == 0) {
+      return null;
     }
 
-    if (previous == 0) {
+    let last = targets[targets.length - 1];
+    if (last.Kind == TokenKind.BlockQuote) {
+      return last as BlockQuoteToken;
+    } else if (last.Kind == TokenKind.List) {
+      return this.getPreviousBlockquote((last as ListToken).Tokens);
+    } else if (last.Kind == TokenKind.ListItem) {
+      return this.getPreviousBlockquote((last as ListItemToken).Tokens);
+    }
+
+    return null;
+  }
+
+  private blockQuote(tokens: Tokens, scanner: Scanner) {
+    let previousPrefix = 0;
+    while (scanner.Consume('>')) {
+      previousPrefix += 1;
+    }
+
+    if (previousPrefix == 0) {
       return false;
     }
 
     scanner.Consume(' ');
 
-    let getPreviousBlockquote = (targets: Tokens): BlockQuoteToken | null => {
-      if (targets.length == 0) {
-        return null;
-      }
-
-      let last = targets[targets.length - 1];
-      if (last.Kind == Element.BlockQuote) {
-        return last as BlockQuoteToken;
-      } else if (last.Kind == Element.List) {
-        return getPreviousBlockquote((last as ListToken).Tokens);
-      } else if (last.Kind == Element.ListItem) {
-        return getPreviousBlockquote((last as ListItemToken).Tokens);
-      }
-
-      return null;
-    }
-
-    let previousBlockQuote = getPreviousBlockquote(tokens);
+    let previousBlockQuote = this.getPreviousBlockquote(tokens);
 
     if (previousBlockQuote == null) {
-      previousBlockQuote = { Kind: Element.BlockQuote, Tokens: [] };
+      previousBlockQuote = { Kind: TokenKind.BlockQuote, Tokens: [] };
       tokens.push(previousBlockQuote);
     }
 
-    for (let i = 0; i < previous - 1; i++) {
+    for (let i = 0; i < previousPrefix - 1; i += 1) {
       if (previousBlockQuote.Tokens.length > 0) {
         let last = previousBlockQuote.Tokens[previousBlockQuote.Tokens.length - 1];
-        if (last.Kind == Element.BlockQuote) {
+        if (last.Kind == TokenKind.BlockQuote) {
           previousBlockQuote = last as BlockQuoteToken;
         }
       }
 
-      let blockquote: BlockQuoteToken = { Kind: Element.BlockQuote, Tokens: [] };
+      let blockquote: BlockQuoteToken = { Kind: TokenKind.BlockQuote, Tokens: [] };
       previousBlockQuote.Tokens.push(blockquote);
       previousBlockQuote = blockquote;
     }
@@ -279,25 +391,33 @@ export class Parser {
         chunk += scanner.Peek();
         scanner.Advance();
       }
-      chunk += EOL;
+      chunk += '\n';
       while (scanner.Consume('>')) {
-        prefix++;
+        prefix += 1;
       }
 
-      if (prefix != previous) {
+      if (prefix != previousPrefix) {
         scanner.Retreat(prefix);
         break;
       }
       prefix = 0;
     }
 
-    let subTokens = this.parse(new Scanner(chunk));
+    let subTokens = this.parseBlocks(new Scanner(chunk));
     if (subTokens.length == 0) {
       // TODO: Throw an error.
       return false;
     }
 
     for (let subToken of subTokens) {
+      if (subToken.Kind == TokenKind.Paragraph) {
+        let last = this.getLastParagraph(previousBlockQuote.Tokens);
+        if (last != null) {
+          last.Text += (subToken as ParagraphToken).Text;
+          continue;
+        }
+      }
+
       previousBlockQuote.Tokens.push(subToken);
     }
 
@@ -313,7 +433,7 @@ export class Parser {
         line += scanner.Peek();
         scanner.Advance();
       }
-      line += EOL;
+      line += '\n';
 
       whitespace = this.whiteSpace(scanner);
       if (whitespace < TAB_SIZE) {
@@ -325,7 +445,7 @@ export class Parser {
       line += " ".repeat(whitespace - TAB_SIZE);
     }
 
-    tokens.push({ Kind: Element.IndentedCode, Code: line } as IndentedCodeToken);
+    tokens.push({ Kind: TokenKind.IndentedCode, Code: line } as IndentedCodeToken);
     return true;
   }
 
@@ -337,7 +457,7 @@ export class Parser {
       if (scanner.Consume('*') ||
         scanner.Consume('-') ||
         scanner.Consume('_')) {
-        count++;
+        count += 1;
         continue;
       }
 
@@ -350,7 +470,7 @@ export class Parser {
     }
 
     if (count >= 3) {
-      tokens.push({ Kind: Element.Hr });
+      tokens.push({ Kind: TokenKind.Hr });
       return true;
     }
 
@@ -374,7 +494,7 @@ export class Parser {
 
     while (!this.eol(scanner)) {
       if (scanner.Consume(bullet)) {
-        startCount++;
+        startCount += 1;
       } else if (eol) {
         eol = false;
         break;
@@ -410,7 +530,7 @@ export class Parser {
       let peek = scanner.Peek();
       if (peek == bullet) {
         while (scanner.Consume(bullet)) {
-          endCount++;
+          endCount += 1;
         }
 
         if (endCount >= startCount) {
@@ -422,32 +542,99 @@ export class Parser {
       scanner.Advance();
     }
 
-    tokens.push({ Kind: Element.FencedCode, Code: code, Language: language } as FencedCodeToen);
+    tokens.push({ Kind: TokenKind.FencedCode, Code: code, Language: language } as FencedCodeToen);
     return false;
   }
 
+  // TODO: Needs refactor in the future. The code is very ugly.
   private reference(tokens: Tokens, scanner: Scanner) {
-    // TODO: Needs refarctor
+    let raw = "";
     if (tokens.length >= 1) {
       let last = tokens[tokens.length - 1];
-      if (last.Kind == Element.Paragraph) {
+      if (last.Kind == TokenKind.Paragraph) {
         return false;
-      } else if (last.Kind == Element.Reference) {
-        let element = last as RefenrenceToken;
+      } else if (last.Kind == TokenKind.Reference) {
+        let element = last as ReferenceToken;
         if (element.Url == "") {
-          // TODO: Skip the white space,
-          // and add this line as url
+          while (!this.eol(scanner)) {
+            let peek = scanner.Peek();
+            scanner.Advance();
+            raw += peek;
+
+            if (peek == ' ' || peek == '\t') {
+              break;
+            }
+          }
+
+          let url = "";
+          while (!this.eol(scanner)) {
+            let peek = scanner.Peek();
+            if (peek == ' ' || peek == '\t') {
+              break;
+            }
+
+            raw += peek;
+            url += peek;
+            scanner.Advance();
+          }
+
+          if (url != "") {
+            element.Url = url;
+            return true;
+          }
+
+          return false;
         }
 
         if (!element.Completed) {
-          // TODO: verify this line which a end of title.
-        }
+          if (element.Title == "") {
+            while (!this.eol(scanner)) {
+              let peek = scanner.Peek();
+              scanner.Advance();
+              raw += peek;
 
+              if (peek == ' ' || peek == '\t') {
+                break;
+              }
+
+              if (!this.eol(scanner) && peek != '\"' && peek != '\'') {
+                return false;
+              }
+            }
+            element.Bullet = scanner.Peek()!;
+            element.Raw += raw;
+          }
+
+          let bullet = element.Bullet;
+          let title = "";
+          let completed = true;
+
+          let peek = scanner.Peek();
+          while (peek != bullet) {
+            title += peek;
+            scanner.Advance();
+            peek = scanner.Peek();
+
+            if (this.eol(scanner)) {
+              completed = false;
+              break;
+            }
+          }
+
+          element.Title += title;
+
+          if (completed) {
+            scanner.Advance();
+            element.Raw += title + bullet;
+            element.Completed = true;
+            // Skip the extra white space following.
+            this.whiteSpace(scanner);
+          }
+        }
         return true;
       }
     }
 
-    let raw = "";
     scanner.Anchor();
     if (!scanner.Consume('[')) {
       return false;
@@ -480,14 +667,14 @@ export class Parser {
       scanner.FlashBack();
       return false;
     }
-
     raw = '[' + label + ']:'
+
     while (!this.eol(scanner)) {
       let peek = scanner.Peek();
       scanner.Advance();
       raw += peek;
 
-      if (peek == ' ' || peek == '\t') {
+      if (peek != ' ' && peek != '\t') {
         break;
       }
     }
@@ -505,7 +692,7 @@ export class Parser {
     }
 
     if (url == "") {
-      tokens.push({ Kind: Element.Reference, Url: url, Title: "", Raw: raw, Completed: false } as RefenrenceToken)
+      tokens.push({ Kind: TokenKind.Reference, Url: url, Title: "", Raw: raw, Completed: false } as ReferenceToken)
       return true;
     }
 
@@ -545,11 +732,13 @@ export class Parser {
     if (completed) {
       scanner.Advance();
       raw += bullet + title + bullet;
+      this.whiteSpace(scanner);
     } else {
-      raw += bullet + title;
+      title += '\n';
+      raw += bullet + title + EOL;
     }
 
-    tokens.push({ Kind: Element.Reference, Url: url, Title: title, Raw: raw, Completed: completed } as RefenrenceToken)
+    tokens.push({ Kind: TokenKind.Reference, Url: url, Title: title, Raw: raw, Bullet: bullet, Completed: completed } as ReferenceToken)
     return true;
   }
 
@@ -564,13 +753,32 @@ export class Parser {
       if (!scanner.Consume(bullet)) {
         return 0;
       }
-      count++;
+      count += 1;
     }
 
     if (count >= 3) {
       return bullet == '=' ? 1 : 2;
     }
     return 0;
+  }
+
+  private getLastParagraph(targets: Tokens): ParagraphToken | null {
+    if (targets.length == 0) {
+      return null;
+    }
+
+    let last = targets[targets.length - 1];
+    if (last.Kind == TokenKind.Paragraph) {
+      return last as ParagraphToken;
+    } else if (last.Kind == TokenKind.BlockQuote) {
+      return this.getLastParagraph((last as BlockQuoteToken).Tokens);
+    } else if (last.Kind == TokenKind.List) {
+      return this.getLastParagraph((last as ListToken).Tokens);
+    } else if (last.Kind == TokenKind.ListItem) {
+      return this.getLastParagraph((last as ListItemToken).Tokens);
+    }
+
+    return null;
   }
 
   private paragraph(tokens: Tokens, scanner: Scanner) {
@@ -580,28 +788,9 @@ export class Parser {
       text += scanner.Peek();
       scanner.Advance();
     }
-    text += EOL;
+    text += '\n';
 
-    let getLastParagraph = (targets: Tokens): ParagraphToken | null => {
-      if (targets.length == 0) {
-        return null;
-      }
-
-      let last = targets[targets.length - 1];
-      if (last.Kind == Element.Paragraph) {
-        return last as ParagraphToken;
-      } else if (last.Kind == Element.BlockQuote) {
-        return getLastParagraph((last as BlockQuoteToken).Tokens);
-      } else if (last.Kind == Element.List) {
-        return getLastParagraph((last as ListToken).Tokens);
-      } else if (last.Kind == Element.ListItem) {
-        return getLastParagraph((last as ListItemToken).Tokens);
-      }
-
-      return null;
-    }
-
-    let last = getLastParagraph(tokens);
+    let last = this.getLastParagraph(tokens);
 
     let level = this.setextHeading(scanner);
     if (level != 0) {
@@ -610,13 +799,13 @@ export class Parser {
         tokens.pop();
       }
 
-      tokens.push({ Kind: Element.Heading, Level: level, Text: text } as HeadingToken);
+      tokens.push({ Kind: TokenKind.Heading, Level: level, Text: text } as HeadingToken);
     }
 
     if (last) {
       (last as ParagraphToken).Text += text;
     } else {
-      tokens.push({ Kind: Element.Paragraph, Text: text } as ParagraphToken);
+      tokens.push({ Kind: TokenKind.Paragraph, Text: text } as ParagraphToken);
     }
 
     return true;
@@ -654,7 +843,7 @@ export class Parser {
     let count = 0;
     while (!scanner.Eos()) {
       if (scanner.Consume(' ')) {
-        count++;
+        count += 1;
       } else if (scanner.Consume('\t')) {
         count += 4;
       } else {
@@ -665,606 +854,67 @@ export class Parser {
     return count;
   }
 
-
   private config: PasrerConfig;
 }
 
-// Blank Line
-function parserBlankLineTestcase1() {
-  let input = "     ";
-  let parser = new Parser({});
-  console.info("< parserBlankLineTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.BlankLine) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< parserBlankLineTestcase1 >");
-}
 
-// Heading
-function parserHeadingTestcase1() {
-  let input = "# heading\n   \tasd\n\t   a";
-  let parser = new Parser({});
-  console.info("< ParserHeadingTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as HeadingToken).Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 1 &&
-      (tokens[0] as HeadingToken).Text == "heading") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHeadingTestcase1 >");
-}
-
-function parserHeadingTestcase2() {
-  let input = "## heading";
-  let parser = new Parser({});
-  console.info("< ParserHeadingTestcase2 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as HeadingToken).Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 2 &&
-      (tokens[0] as HeadingToken).Text == "heading") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHeadingTestcase2 >");
-}
-
-function parserHeadingTestcase3() {
-  let input = "### heading";
-  let parser = new Parser({});
-  console.info("< ParserHeadingTestcase3 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as HeadingToken).Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 3 &&
-      (tokens[0] as HeadingToken).Text == "heading") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHeadingTestcase3 >");
-}
-
-function parserHeadingTestcase4() {
-  let input = "#### heading";
-  let parser = new Parser({});
-  console.info("< ParserHeadingTestcase4 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###")
-  } else {
-    if ((tokens[0] as HeadingToken).Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 4 &&
-      (tokens[0] as HeadingToken).Text == "heading") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHeadingTestcase4 >");
-}
-
-function parserHeadingTestcase5() {
-  let input = "##### heading";
-  let parser = new Parser({});
-  console.info("< ParserHeadingTestcase5 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as HeadingToken).Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 5 &&
-      (tokens[0] as HeadingToken).Text == "heading") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHeadingTestcase5 >");
-}
-
-function parserHeadingTestcase6() {
-  let input = "###### heading";
-  let parser = new Parser({});
-  console.info("< ParserHeadingTestcase6 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as HeadingToken).Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 6 &&
-      (tokens[0] as HeadingToken).Text == "heading") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHeadingTestcase6 >");
-}
-
-// Block Quote
-function parserBlockQuoteTestcase1() {
-  let input = "> # Heading";
-  let parser = new Parser({});
-  console.info("< ParserBlockQuoteTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as BlockQuoteToken).Kind == Element.BlockQuote &&
-      (tokens[0] as BlockQuoteToken).Tokens[0].Kind == Element.Heading) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserBlockQuoteTestcase1 >");
-}
-
-function parserBlockQuoteTestcase2() {
-  let input = ">>";
-  let parser = new Parser({});
-  console.info("< ParserBlockQuoteTestcase2 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as BlockQuoteToken).Kind == Element.BlockQuote &&
-      (tokens[0] as BlockQuoteToken).Tokens[0].Kind == Element.BlockQuote) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserBlockQuoteTestcase2 >");
-}
-
-function parserBlockQuoteTestcase3() {
-  let input = ">     code line 1";
-  let parser = new Parser({});
-  console.info("< ParserBlockQuoteTestcase3 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as BlockQuoteToken).Kind == Element.BlockQuote &&
-      (tokens[0] as BlockQuoteToken).Tokens[0].Kind == Element.IndentedCode &&
-      (((tokens[0] as BlockQuoteToken).Tokens[0]) as IndentedCodeToken).Code == "code line 1") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserBlockQuoteTestcase3 >");
-}
-
-// Indented Code
-function parserIndentedCodeTestcase1() {
-  let input = "    indented code";
-  let parser = new Parser({});
-  console.info("< ParserIndentedCodeTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as IndentedCodeToken).Kind == Element.IndentedCode) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserIndentedCodeTestcase1 >");
-}
-
-function parserIndentedCodeTestcase2() {
-  let input = "    code line 1\n    code line 2";
-  let parser = new Parser({});
-  console.info("< ParserIndentedCodeTestcase2 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as IndentedCodeToken).Kind == Element.IndentedCode) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserIndentedCodeTestcase2 >");
-}
-
-function parserIndentedCodeTestcase3() {
-  let input = "    code line 1\n    code line 2";
-  let parser = new Parser({});
-  console.info("< ParserIndentedCodeTestcase3 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if ((tokens[0] as IndentedCodeToken).Kind == Element.IndentedCode &&
-      (tokens[0] as IndentedCodeToken).Code == "code line 1\ncode line 2") {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserIndentedCodeTestcase3 >");
-}
-
-// Hr
-function ParserHrTestcase1() {
-  let input = "-- -- --";
-  let parser = new Parser({});
-  console.info("< ParserHrTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.Hr) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserHrTestcase1 >");
-}
-
-// Fenced Code
-function parserFencedCodeTestcase1() {
-  let input = "\`\`\`\nprintf(\"Hello World!\");\n\`\`\`";
-  let parser = new Parser({});
-  console.info("< ParserFencedCodeTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.FencedCode &&
-      (tokens[0] as FencedCodeToen).Code == "printf(\"Hello World!\");\n"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserFencedCodeTestcase1 >");
-}
-
-function parserFencedCodeTestcase2() {
-  let input = "~~~\nprintf(\"Hello World!\");\n~~~~~";
-  let parser = new Parser({});
-  console.info("< ParserFencedCodeTestcase2 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.FencedCode &&
-      (tokens[0] as FencedCodeToen).Code == "printf(\"Hello World!\");\n"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserFencedCodeTestcase2 >");
-}
-
-function parserFencedCodeTestcase3() {
-  let input = "~~~ c\nprintf(\"Hello World!\");\n~~~~~";
-  let parser = new Parser({});
-  console.info("< ParserFencedCodeTestcase3 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.FencedCode &&
-      (tokens[0] as FencedCodeToen).Code == "printf(\"Hello World!\");\n" &&
-      (tokens[0] as FencedCodeToen).Language == "c"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserFencedCodeTestcase3 >");
-}
-
-// Def
-function parserDefTestcase1() {
-  let input = "[foo]: /url \"title\"";
-  let parser = new Parser({});
-  console.info("< ParserDefTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.Reference &&
-      (tokens[0] as RefenrenceToken).Label == "foo" &&
-      (tokens[0] as RefenrenceToken).Url == "/url" &&
-      (tokens[0] as RefenrenceToken).Title == "title"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserDefTestcase1 >");
-}
-
-function parserDefTestcase2() {
-  let input = "[foo]:\n/url";
-  let parser = new Parser({});
-  console.info("< ParserDefTestcase2 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.Reference &&
-      (tokens[0] as RefenrenceToken).Label == "foo" &&
-      (tokens[0] as RefenrenceToken).Url == "/url" &&
-      (tokens[0] as RefenrenceToken).Title == ""
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserDefTestcase2 >");
-}
-
-function parserDefTestcase3() {
-  let input = "[foo]: /url \'\ntitle\nline1\nline2\n\'";
-  let parser = new Parser({});
-  console.info("< ParserDefTestcase3 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.Reference &&
-      (tokens[0] as RefenrenceToken).Label == "foo" &&
-      (tokens[0] as RefenrenceToken).Url == "/url" &&
-      (tokens[0] as RefenrenceToken).Title == "\ntitle\nline1\nline2\n"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< ParserDefTestcase3 >");
-}
-
-function ParserParagrahTestcase1() {
-  let input = "Heading1\n=====";
-  let parser = new Parser({});
-  console.info("< scannerParagrahTestcase1 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 1 &&
-      (tokens[0] as HeadingToken).Text == "Heading1\n"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< scannerParagrahTestcase1 >");
-}
-
-
-function ParserParagrahTestcase2() {
-  let input = "Heading2\n-------";
-  let parser = new Parser({});
-  console.info("< scannerParagrahTestcase2 >");
-  let tokens = parser.Parse(input);
-  if (tokens.length == 0) {
-    console.error("### TEST FAILED! ###");
-    console.dir(tokens, { depth: Infinity });
-  } else {
-    if (tokens[0].Kind == Element.Heading &&
-      (tokens[0] as HeadingToken).Level == 2 &&
-      (tokens[0] as HeadingToken).Text == "Heading2\n"
-    ) {
-      console.log("### TEST PASSED! ###");
-    } else {
-      console.error("### TEST FAILED! ###");
-      console.dir(tokens, { depth: Infinity });
-    }
-  }
-  console.info("< scannerParagrahTestcase2 >");
-}
-
-function ParserCommonTestcase1() {
-  let input =
-    `# Intro
-
-Hi everyone, Today I'm excited to announce a great progress of my first static site generator (SSG) project. That is the markdown parser is completed.
-
-Markdown is a esay, simple markup languange which is suitable for writing some articles. And it can be esay to transform to html. So a markodnw parser is a basic component of a SSG.
-
-The markdown parser of *wisp*.
-
-
-> here is a simple test.
->>> here is an another test.
-asdasdasd
->>> # Heading
->> # Heading1
-asdasdasd
-`;
-
-  let parser = new Parser({});
-  let tokens = parser.Parse(input);
-
-  console.dir(tokens, { depth: Infinity });
-}
-
-export function ParserTestcases() {
-  // Heading
-  parserHeadingTestcase1();
-  parserHeadingTestcase2();
-  parserHeadingTestcase3();
-  parserHeadingTestcase4();
-  parserHeadingTestcase5();
-  parserHeadingTestcase6();
-
-  // Block Quote
-  parserBlockQuoteTestcase1();
-  parserBlockQuoteTestcase2();
-  parserBlockQuoteTestcase3();
-
-  // Blank Line
-  parserBlankLineTestcase1();
-
-  // Indented Code
-  parserIndentedCodeTestcase1();
-  parserIndentedCodeTestcase2();
-  parserIndentedCodeTestcase3();
-
-  // Hr
-  ParserHrTestcase1();
-
-  // Fenced Code
-  parserFencedCodeTestcase1();
-  parserFencedCodeTestcase2();
-  parserFencedCodeTestcase3();
-
-  // Def
-  parserDefTestcase1();
-  parserDefTestcase2();
-  parserDefTestcase3();
-
-  // Paragraph
-  ParserParagrahTestcase1();
-  ParserParagrahTestcase2();
-
-  // Common test
-  ParserCommonTestcase1();
-}
-
-// let input = `
-// > line 1
-// line 1 continuation text
-// > line 2
-// line 2 continuation text
-// > line 3
-// line 3 continuation text
-// > line 4
-// line 4 continuation text
-// > line 5
-// line 5 continuation text
-// > line 6
-// line 6 continuation text
-// > line 7
-// line 7 continuation text
-// > line 8
-// line 8 continuation text
-// > line 9
-// line 9 continuation text
-// > line 10
-// line 10 continuation text
-// > line 11
-// line 11 continuation text
-// > line 12
-// line 12 continuation text
-// > line 13
-// line 13 continuation text
-// > line 13
-// line 13 continuation text
-// > line 14
-// line 14 continuation text
-// > line 14
-// line 14 continuation text
-// > line 15
-// line 15 continuation text
-// > line 16
-// line 16 continuation text
-// > line 17
-// line 17 continuation text
-// > line 18
-// line 18 continuation text
-// > line 19
-// line 19 continuation text
-// > line 20
-// line 20 continuation text
-// > line 21
-// line 21 continuation text
-// > line 22
-// line 22 continuation text
-// > line 23
-// line 23 continuation text
-// > line 24
-// line 24 continuation text
-// > line 25
-// line 25 continuation text
-// `;
 let input = `
-[title]: /url "title
-
-"
+> line 1
+line 1 continuation text
+> line 2
+line 2 continuation text
+> line 3
+line 3 continuation text
+> line 4
+line 4 continuation text
+> line 5
+line 5 continuation text
+> line 6
+line 6 continuation text
+> line 7
+line 7 continuation text
+> line 8
+line 8 continuation text
+> line 9
+line 9 continuation text
+> line 10
+line 10 continuation text
+> line 11
+line 11 continuation text
+> line 12
+line 12 continuation text
+> line 13
+line 13 continuation text
+> line 13
+line 13 continuation text
+> line 14
+line 14 continuation text
+> line 14
+line 14 continuation text
+> line 15
+line 15 continuation text
+> line 16
+line 16 continuation text
+> line 17
+line 17 continuation text
+> line 18
+line 18 continuation text
+> line 19
+line 19 continuation text
+> line 20
+line 20 continuation text
+> line 21
+line 21 continuation text
+> line 22
+line 22 continuation text
+> line 23
+line 23 continuation text
+> line 24
+line 24 continuation text
+> line 25
+line 25 continuation text
 `;
+
 let parser = new Parser({});
-let tokens = parser.Parse(input);
-console.dir(tokens, { depth: Infinity });
+let ast = parser.Parse(input);
+console.dir(ast, { depth: Infinity });
