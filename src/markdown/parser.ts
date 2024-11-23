@@ -1,9 +1,9 @@
 import { Scanner } from "./scanner";
 import { BlockQuoteToken, FencedCodeToen, HeadingToken, IndentedCodeToken, ListItemToken, ListToken, ParagraphToken, ReferenceToken, Token, TokenKind, Tokens } from "./tokens";
-import { Node, Nodes, NodeTag } from "./nodes";
+import { Node, NodeTag } from "./nodes";
+import { EOL } from "os";
 
 export interface PasrerConfig {
-  EOL?: string;
   TAB_SIZE?: number;
 };
 
@@ -12,7 +12,6 @@ export function MakeDefaultParserConfig() {
 }
 
 const TAB_SIZE = 4;
-const EOL = '\n';
 
 export class Parser {
   constructor(config: PasrerConfig) {
@@ -84,7 +83,6 @@ export class Parser {
         return;
 
       case TokenKind.Heading: {
-
         let heading = undefined;
         let token = target as HeadingToken;
         switch (token.Level) {
@@ -171,46 +169,99 @@ export class Parser {
       index: 0,
       text
     };
+
+    if (text[text.length - 1] == '\n') {
+      text = text.substring(0, text.length - 1);
+    }
+
     while (context.index < text.length) {
       if (this.codeSpan(root, context)) {
         continue;
       }
 
-      if (this.text(root, context)) {
-        continue;
-      }
-
-
+      this.text(root, context.text[context.index]);
+      context.index += 1;
     }
   }
 
   private codeSpan(root: Node, context: { index: number, text: string }) {
-    let { index, text } = context;
-    if (text[index] != '`') {
+    if (context.text[context.index] != '`') {
       return false;
     }
 
+    context.index += 1;
+    // Check the next chacter that is alos '`'
+    if (context.text[context.index + 1] != '`') {
+      root.SetChild(this.codeSpanRuleI(context));
+    } else {
+      this.codeSpanRuleII(context);
+    }
 
-    context.index = index;
     return true;
+  }
+
+  private codeSpanRuleI(context: { index: number, text: string }) {
+    let { index, text } = context;
+    // Skip a whitespace at the beginning of text.
+    let frontWhiteSpace = false;
+    if (text[index + 1] == ' ') {
+      index += 1;
+    }
+
+    let code = "";
+    let backWhiteSpace = 0;
+    while (index < text.length) {
+      if (text[index] == '`' && text[index + 1] != '`') {
+        index += 1;
+        break;
+      } else if (text[index] == ' ') {
+        backWhiteSpace += 1;
+        index += 1;
+        continue;
+      } else if (text[index] == '\n') {
+        code += ' ';
+        continue;
+      }
+
+      backWhiteSpace = 0;
+      code += text[index];
+      index += 1;
+    }
+
+    if (backWhiteSpace > 0) {
+      let count = frontWhiteSpace ? backWhiteSpace - 1 : backWhiteSpace;
+      code += ' '.repeat(count);
+    } else {
+      if (frontWhiteSpace) {
+        code = ' ' + code;
+      }
+    }
+
+    let node = new Node(NodeTag.CodeSpan);
+    node.SetText(code);
+    context.index = index;
+    return node;
+  }
+
+  private codeSpanRuleII(context: { index: number, text: string }) {
+    return false;
   }
 
   private softbreak(root: Node, context: { index: number, text: string }) {
 
   }
 
-  private text(root: Node, context: { index: number, text: string }) {
-    // let children = root.Children();
-    // if (children.length == 0 || children[children.length - 1].Tag != NodeTag.Text) {
-    //   let text = new Node(NodeTag.Text);
-    //   text.SetText(c);
-    //   root.SetChild(text);
-    //   return;
-    // }
+  private text(root: Node, c: string) {
+    let children = root.Children();
+    if (children.length == 0 || children[children.length - 1].Tag != NodeTag.Text) {
+      let text = new Node(NodeTag.Text);
+      text.SetText(c);
+      root.SetChild(text);
+      return;
+    }
 
-    // let text = children[children.length - 1];
-    // text.SetText(text.Text() + c);
-    return false;
+    let text = children[children.length - 1];
+    text.SetText(text.Text() + c);
   }
 
   private emphasis(root: Node, index: number, text: string) {
@@ -669,15 +720,7 @@ export class Parser {
     }
     raw = '[' + label + ']:'
 
-    while (!this.eol(scanner)) {
-      let peek = scanner.Peek();
-      scanner.Advance();
-      raw += peek;
-
-      if (peek != ' ' && peek != '\t') {
-        break;
-      }
-    }
+    raw += ' '.repeat(this.whiteSpace(scanner));
 
     let url = "";
     while (!this.eol(scanner)) {
@@ -696,15 +739,7 @@ export class Parser {
       return true;
     }
 
-    while (!this.eol(scanner)) {
-      let peek = scanner.Peek();
-      scanner.Advance();
-      raw += peek;
-
-      if (peek == ' ' || peek == '\t') {
-        break;
-      }
-    }
+    raw += ' '.repeat(this.whiteSpace(scanner));
 
     // The title is optional.
     let title = "";
@@ -735,7 +770,7 @@ export class Parser {
       this.whiteSpace(scanner);
     } else {
       title += '\n';
-      raw += bullet + title + EOL;
+      raw += bullet + title + '\n';
     }
 
     tokens.push({ Kind: TokenKind.Reference, Url: url, Title: title, Raw: raw, Bullet: bullet, Completed: completed } as ReferenceToken)
@@ -856,65 +891,3 @@ export class Parser {
 
   private config: PasrerConfig;
 }
-
-
-let input = `
-> line 1
-line 1 continuation text
-> line 2
-line 2 continuation text
-> line 3
-line 3 continuation text
-> line 4
-line 4 continuation text
-> line 5
-line 5 continuation text
-> line 6
-line 6 continuation text
-> line 7
-line 7 continuation text
-> line 8
-line 8 continuation text
-> line 9
-line 9 continuation text
-> line 10
-line 10 continuation text
-> line 11
-line 11 continuation text
-> line 12
-line 12 continuation text
-> line 13
-line 13 continuation text
-> line 13
-line 13 continuation text
-> line 14
-line 14 continuation text
-> line 14
-line 14 continuation text
-> line 15
-line 15 continuation text
-> line 16
-line 16 continuation text
-> line 17
-line 17 continuation text
-> line 18
-line 18 continuation text
-> line 19
-line 19 continuation text
-> line 20
-line 20 continuation text
-> line 21
-line 21 continuation text
-> line 22
-line 22 continuation text
-> line 23
-line 23 continuation text
-> line 24
-line 24 continuation text
-> line 25
-line 25 continuation text
-`;
-
-let parser = new Parser({});
-let ast = parser.Parse(input);
-console.dir(ast, { depth: Infinity });
