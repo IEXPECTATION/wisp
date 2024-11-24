@@ -194,7 +194,7 @@ export class Parser {
     if (context.text[context.index + 1] != '`') {
       root.SetChild(this.codeSpanRuleI(context));
     } else {
-      this.codeSpanRuleII(context);
+      root.SetChild(this.codeSpanRuleII(context));
     }
 
     return true;
@@ -244,7 +244,7 @@ export class Parser {
   }
 
   private codeSpanRuleII(context: { index: number, text: string }) {
-    return false;
+    return new Node(NodeTag.CodeSpan);
   }
 
   private softbreak(root: Node, context: { index: number, text: string }) {

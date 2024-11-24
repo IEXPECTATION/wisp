@@ -1,4 +1,3 @@
-import { text } from "stream/consumers";
 import { Node, NodeTag } from "./nodes";
 import { EOL } from "os";
 
