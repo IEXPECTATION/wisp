@@ -1,19 +1,9 @@
-import { Parser } from "../../../dist/src/markdown/parser.js";
-import { HTMLRender } from "../../../dist/src/markdown/renderer.js";
+// TODO: Make a server to host the markdown parsing feature.
+export async function Parse(raw) {
 
-const parser = new Parser({});
-const renderer = new HTMLRender();
-
-let context = {
-  WriteHtmlElements: () => {
-  },
-  CallMarkdownParser: (input) => {
-    let ast = parser.Parse(input);
-    let document = renderer.Render(ast);
-  },
-
-  Render: (html) => {
-    let product = context.findProductNode();
-
-  }
 }
+
+async function Render(input) {
+
+}
+
