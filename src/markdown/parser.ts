@@ -190,36 +190,53 @@ export class Parser {
     }
 
     context.index += 1;
-    // Check the next chacter that is alos '`'
-    if (context.text[context.index + 1] != '`') {
-      root.SetChild(this.codeSpanRuleI(context));
-    } else {
-      root.SetChild(this.codeSpanRuleII(context));
+    let count = 1;
+    if (context.text[context.index + 1] == '`') {
+      count += 1;
+      context.index += 1;
     }
+    // Check the next chacter that is alos '`'
+    root.SetChild(this.codeSpanRule(context, count));
 
     return true;
   }
 
-  private codeSpanRuleI(context: { index: number, text: string }) {
+  private codeSpanRule(context: { index: number, text: string }, count: number) {
     let { index, text } = context;
     // Skip a whitespace at the beginning of text.
-    let frontWhiteSpace = false;
-    if (text[index + 1] == ' ') {
+    let frontWhiteSpace = 0;
+
+    let code = "";
+    while (text[index] == ' ') {
+      frontWhiteSpace += 1;
       index += 1;
     }
 
-    let code = "";
     let backWhiteSpace = 0;
     while (index < text.length) {
-      if (text[index] == '`' && text[index + 1] != '`') {
-        index += 1;
-        break;
+      if (text[index] == '`') {
+        if (text[index + 1] == '`') {
+          if (count == 2) {
+            index += 2;
+            break;
+          }
+
+          // Add the current backtick to the code to avoid checking the second backtick in the next loop.
+          code += text[index];
+          index += 1;
+        } else {
+          if (count == 1) {
+            index += 1;
+            break;
+          }
+        }
       } else if (text[index] == ' ') {
         backWhiteSpace += 1;
         index += 1;
         continue;
       } else if (text[index] == '\n') {
         code += ' ';
+        index += 1;
         continue;
       }
 
@@ -228,19 +245,20 @@ export class Parser {
       index += 1;
     }
 
-    if (backWhiteSpace > 0) {
-      let count = frontWhiteSpace ? backWhiteSpace - 1 : backWhiteSpace;
-      code += ' '.repeat(count);
-    } else {
-      if (frontWhiteSpace) {
-        code = ' ' + code;
-      }
+    if (frontWhiteSpace > 1 && backWhiteSpace > 1) {
+      frontWhiteSpace = frontWhiteSpace > 1 ? frontWhiteSpace - 1 : frontWhiteSpace;
+      backWhiteSpace = backWhiteSpace > 1 ? backWhiteSpace - 1 : backWhiteSpace;
     }
 
+    code = ' '.repeat(frontWhiteSpace) + code + ' '.repeat(backWhiteSpace);
     let node = new Node(NodeTag.CodeSpan);
     node.SetText(code);
     context.index = index;
     return node;
+
+  }
+
+  private codeSpanRuleI(context: { index: number, text: string }) {
   }
 
   private codeSpanRuleII(context: { index: number, text: string }) {

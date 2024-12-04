@@ -11,7 +11,7 @@ function RendererTestcase4HeadingI() {
 }
 
 function RendererTestcase4ParagraphI() {
-  let input = "# Paragraph Test\n This is a line `test` `paragraph`.";
+  let input = "# Paragraph Test\n This is a line `  tes\nt`` ` `paragraph`.";
 //   let input = `
 // > line 1
 // line 1 continuation text
