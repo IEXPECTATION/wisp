@@ -196,12 +196,12 @@ export class Parser {
       context.index += 1;
     }
     // Check the next chacter that is alos '`'
-    root.SetChild(this.codeSpanRule(context, count));
+    root.SetChild(this.processCodeSpan(context, count));
 
     return true;
   }
 
-  private codeSpanRule(context: { index: number, text: string }, count: number) {
+  private processCodeSpan(context: { index: number, text: string }, count: number) {
     let { index, text } = context;
     // Skip a whitespace at the beginning of text.
     let frontWhiteSpace = 0;
@@ -245,9 +245,9 @@ export class Parser {
       index += 1;
     }
 
-    if (frontWhiteSpace > 1 && backWhiteSpace > 1) {
-      frontWhiteSpace = frontWhiteSpace > 1 ? frontWhiteSpace - 1 : frontWhiteSpace;
-      backWhiteSpace = backWhiteSpace > 1 ? backWhiteSpace - 1 : backWhiteSpace;
+    if (frontWhiteSpace > 0 && backWhiteSpace > 0) {
+      frontWhiteSpace -= 1;
+      backWhiteSpace -= 1;
     }
 
     code = ' '.repeat(frontWhiteSpace) + code + ' '.repeat(backWhiteSpace);
@@ -255,14 +255,6 @@ export class Parser {
     node.SetText(code);
     context.index = index;
     return node;
-
-  }
-
-  private codeSpanRuleI(context: { index: number, text: string }) {
-  }
-
-  private codeSpanRuleII(context: { index: number, text: string }) {
-    return new Node(NodeTag.CodeSpan);
   }
 
   private softbreak(root: Node, context: { index: number, text: string }) {
@@ -905,6 +897,47 @@ export class Parser {
     }
 
     return count;
+  }
+
+  private consume(scanner: Scanner): string | undefined {
+    let peek = scanner.Peek();
+    if (peek == '\\') {
+      scanner.Advance();
+      peek += scanner.Peek();
+    }
+    scanner.Advance();
+    return peek;
+  }
+
+  private consumeIf(scanner: Scanner, char: string) {
+    console.assert(char.length == 1, "The length of expected char is not equal to 1.")
+    let buffer = "";
+    let peek = scanner.Peek();
+    while (peek != char) {
+      buffer += peek;
+      if (peek == '\\') {
+        scanner.Advance();
+        buffer += scanner.Peek();
+      }
+      scanner.Advance();
+      peek = scanner.Peek();
+    }
+    return buffer;
+  }
+
+  private consumeUntil(scanner: Scanner, char: string) {
+    console.assert(char.length == 1, "The length of expected char is not equal to 1.")
+    let buffer = "";
+    let peek = scanner.Peek();
+    while (peek == char) {
+      buffer += peek;
+      if (peek == '\\') {
+        scanner.Advance();
+        buffer += scanner.Peek();
+      }
+      scanner.Advance();
+      peek = scanner.Peek();
+    }
   }
 
   private config: PasrerConfig;
