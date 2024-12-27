@@ -52,6 +52,10 @@ export class Parser {
         continue;
       }
 
+      if (this.list(tokens, scanner)) {
+        continue;
+      }
+
       if (this.fencedCode(tokens, scanner)) {
         continue;
       }
@@ -358,7 +362,6 @@ export class Parser {
       Kind: TokenKind.BlankLine
     });
     return true;
-
   }
 
   private headingLevel(scanner: Scanner) {
@@ -386,11 +389,7 @@ export class Parser {
       return false;
     }
 
-    let text = "";
-    while (!this.eol(scanner)) {
-      text += scanner.Peek();
-      scanner.Advance();
-    }
+    let text = this.readLine(scanner);
 
     tokens.push({ Kind: TokenKind.Heading, Text: text, Level: level } as HeadingToken)
     return true;
@@ -432,11 +431,12 @@ export class Parser {
       tokens.push(previousBlockQuote);
     }
 
-    for (let i = 0; i < previousPrefix - 1; i += 1) {
+    for (let i = 0; i < previousPrefix - 1; i++) {
       if (previousBlockQuote.Tokens.length > 0) {
         let last = previousBlockQuote.Tokens[previousBlockQuote.Tokens.length - 1];
         if (last.Kind == TokenKind.BlockQuote) {
           previousBlockQuote = last as BlockQuoteToken;
+          continue;
         }
       }
 
@@ -448,11 +448,8 @@ export class Parser {
     let chunk = "";
     let prefix = 0;
     while (!scanner.Eos()) {
-      while (!this.eol(scanner)) {
-        chunk += scanner.Peek();
-        scanner.Advance();
-      }
-      chunk += '\n';
+      chunk += this.readLine(scanner);
+
       while (scanner.Consume('>')) {
         prefix += 1;
       }
@@ -490,11 +487,7 @@ export class Parser {
     let whitespace = 0;
 
     while (!scanner.Eos()) {
-      while (!this.eol(scanner)) {
-        line += scanner.Peek();
-        scanner.Advance();
-      }
-      line += '\n';
+      line += this.readLine(scanner);
 
       whitespace = this.whiteSpace(scanner);
       if (whitespace < TAB_SIZE) {
@@ -827,30 +820,20 @@ export class Parser {
   }
 
   private paragraph(tokens: Tokens, scanner: Scanner) {
-    let text = "";
-
-    while (!this.eol(scanner)) {
-      text += scanner.Peek();
-      scanner.Advance();
-    }
-    text += '\n';
+    let text = this.readLine(scanner);
 
     let last = this.getLastParagraph(tokens);
-
-    let level = this.setextHeading(scanner);
-    if (level != 0) {
-      if (last) {
+    if (!last) {
+      tokens.push({ Kind: TokenKind.Paragraph, Text: text } as ParagraphToken);
+    } else {
+      let level = this.setextHeading(scanner);
+      if (level == 0) {
+        (last as ParagraphToken).Text += text;
+      } else {
         text = (last as ParagraphToken).Text + text;
         tokens.pop();
+        tokens.push({ Kind: TokenKind.Heading, Level: level, Text: text } as HeadingToken);
       }
-
-      tokens.push({ Kind: TokenKind.Heading, Level: level, Text: text } as HeadingToken);
-    }
-
-    if (last) {
-      (last as ParagraphToken).Text += text;
-    } else {
-      tokens.push({ Kind: TokenKind.Paragraph, Text: text } as ParagraphToken);
     }
 
     return true;
@@ -858,6 +841,7 @@ export class Parser {
 
   private list(tokens: Tokens, scanner: Scanner) {
     // TODO: Not Implement!
+    return false;
   }
 
   private listItem(tokens: Tokens, scanner: Scanner) {
@@ -899,45 +883,24 @@ export class Parser {
     return count;
   }
 
-  private consume(scanner: Scanner): string | undefined {
-    let peek = scanner.Peek();
-    if (peek == '\\') {
-      scanner.Advance();
-      peek += scanner.Peek();
-    }
-    scanner.Advance();
-    return peek;
-  }
-
-  private consumeIf(scanner: Scanner, char: string) {
-    console.assert(char.length == 1, "The length of expected char is not equal to 1.")
+  private readLine(scanner: Scanner, unless: number = -1) {
     let buffer = "";
-    let peek = scanner.Peek();
-    while (peek != char) {
-      buffer += peek;
-      if (peek == '\\') {
-        scanner.Advance();
-        buffer += scanner.Peek();
+    while (!this.eol(scanner)) {
+      let next = scanner.Next()!;
+
+      if (next == '\\') {
+        buffer += next;
+        continue;
       }
-      scanner.Advance();
-      peek = scanner.Peek();
+
+      if (unless != -1 && next.charCodeAt(0) == unless) {
+        break;
+      }
+      buffer += next;
     }
+
+    buffer += '\n';
     return buffer;
-  }
-
-  private consumeUntil(scanner: Scanner, char: string) {
-    console.assert(char.length == 1, "The length of expected char is not equal to 1.")
-    let buffer = "";
-    let peek = scanner.Peek();
-    while (peek == char) {
-      buffer += peek;
-      if (peek == '\\') {
-        scanner.Advance();
-        buffer += scanner.Peek();
-      }
-      scanner.Advance();
-      peek = scanner.Peek();
-    }
   }
 
   private config: PasrerConfig;
