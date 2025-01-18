@@ -23,6 +23,7 @@ export enum NodeTag {
 };
 
 export type Nodes = Node[];
+
 export class Node {
   Tag: NodeTag;
 

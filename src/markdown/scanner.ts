@@ -1,59 +1,66 @@
+import { assert } from "console";
 
 export class Scanner {
   constructor(input: string) {
     this.input = input;
   }
 
-  Eos() {
-    return this.offset == this.input.length;
+  Position() {
+    return this.position;
+  }
+
+  End() {
+    if (this.position < this.input.length) {
+      return false;
+    }
+
+    return true;
   }
 
   Peek() {
-    if (this.Eos()) {
-      return undefined;
-    }
+    assert(!this.End());
 
-    return this.input[this.offset];
+    return this.input[this.position];
   }
 
-  Next(count: number = 1) {
-    if (this.Eos()) {
-      return undefined;
-    }
+  Skip() {
+    assert(!this.End());
 
-    let next = this.input.substring(this.offset, this.offset + count);
-    this.offset += count;
-    return next;
+    this.position += 1;
   }
 
-  Advance(count: number = 1) {
-    this.offset += count;
-  }
+  Next() {
+    assert(!this.End());
 
-  Retreat(count: number = 1) {
-    this.offset -= count;
+    this.position += 1;
+    return this.input[this.position];
   }
 
   Consume(char: string) {
-    if (this.Peek() == char) {
-      this.Advance();
+    let peek = this.Peek();
+    if (peek == char) {
+      this.position += 1;
       return true;
     }
+
     return false;
   }
 
-  Anchor() {
-    this.anchor = this.offset;
+  Push() {
+    this.anchor.push(this.position);
   }
 
-  FlashBack() {
-    this.offset = this.anchor;
+  Pop() {
+    assert(this.anchor.length > 0);
+
+    this.position = this.anchor.pop()!;
+  }
+
+  Clear() {
+    this.anchor = [];
   }
 
   private input: string;
-  private offset: number = 0;
-  private anchor: number = 0;
-}
-
-export function ScannerTestcases() {
+  private position: number = 0;
+  private anchor: number[] = [];
 }

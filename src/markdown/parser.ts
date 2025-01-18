@@ -1,7 +1,7 @@
 import { Scanner } from "./scanner";
-import { BlockQuoteToken, FencedCodeToen, HeadingToken, IndentedCodeToken, ListItemToken, ListToken, ParagraphToken, ReferenceToken, Token, TokenKind, Tokens } from "./tokens";
+import { BlankLineToken, BlockQuoteToken, ContainerBlock, FencedCodeToen, HeadingToken, HrToken, IndentedCodeToken, ParagraphToken, Token, TokenKind, Tokens, LeafBlock, TokenSpan, isLeafBlock, isContainerBlock } from "./tokens";
 import { Node, NodeTag } from "./nodes";
-import { EOL } from "os";
+import { assert } from "console";
 
 export interface PasrerConfig {
   TAB_SIZE?: number;
@@ -11,358 +11,84 @@ export function MakeDefaultParserConfig() {
 
 }
 
-const TAB_SIZE = 4;
-
 export class Parser {
-  constructor(config: PasrerConfig) {
-    this.config = config;
-  }
-
+  // Return a ast of markdown document. This ast can be passed to a renderer.
   Parse(input: string) {
-    let scanner = new Scanner(input);
-    let tokens = this.parseBlocks(scanner);
+    this.input = input;
+    this.parseBlocks();
     let document = new Node(NodeTag.Document);
-    this.parseInlines(document, tokens);
+    this.parseInlines(document, this.tokens);
     return document;
   }
 
-  private parseBlocks(scanner: Scanner) {
-    let tokens: Tokens = [];
-    while (!scanner.Eos()) {
-      if (this.blankline(tokens, scanner)) {
-        continue;
-      }
+  private parseBlocks() {
+    let scanner = new Scanner(this.input);
+    let matched = null;
 
-      let whitespace = this.whiteSpace(scanner);
-      if (whitespace >= TAB_SIZE) {
-        if (this.indentedCode(tokens, scanner)) {
-          let el = tokens[tokens.length - 1];
-          //  If the number of whitespace is larger than TAB_SIZE, we should add the extra whitespace to code for first line.
-          (el as IndentedCodeToken).Code = " ".repeat(whitespace - TAB_SIZE) + (el as IndentedCodeToken).Code;
-          continue;
-        }
-        throw new Error("Unknown element of markdown!");
-      }
+    while (!scanner.End()) {
+      this.indent = this.whiteSpace(scanner);
 
-      if (this.heading(tokens, scanner)) {
-        continue;
-      }
+      matched = this.containerBlcoks(scanner);
 
-      if (this.blockQuote(tokens, scanner)) {
-        continue;
-      }
-
-      if (this.list(tokens, scanner)) {
-        continue;
-      }
-
-      if (this.fencedCode(tokens, scanner)) {
-        continue;
-      }
-
-      if (this.hr(tokens, scanner)) {
-        continue;
-      }
-
-      if (this.reference(tokens, scanner)) {
-        continue;
-      }
-
-      if (this.paragraph(tokens, scanner)) {
-        continue;
-      }
-    }
-    return tokens;
-  }
-
-  private parseInlines(root: Node, targets: Tokens) {
-    for (let token of targets) {
-      this.inlines(root, token);
-    }
-  }
-
-  private inlines(root: Node, target: Token) {
-    switch (target.Kind) {
-      case TokenKind.BlankLine:
-        return;
-
-      case TokenKind.Heading: {
-        let heading = undefined;
-        let token = target as HeadingToken;
-        switch (token.Level) {
-          case 1:
-            heading = new Node(NodeTag.H1);
-            break;
-          case 2:
-            heading = new Node(NodeTag.H2);
-            break;
-          case 3:
-            heading = new Node(NodeTag.H3);
-            break;
-          case 4:
-            heading = new Node(NodeTag.H4);
-            break;
-          case 5:
-            heading = new Node(NodeTag.H5);
-            break;
-          case 6:
-            heading = new Node(NodeTag.H6);
-            break;
-          default:
-            throw new Error("Unknown heading level!");
-        }
-        this.inline(heading, token.Text);
-        root.SetChild(heading);
-      }
-        return;
-
-      case TokenKind.Hr: {
-        let hr = new Node(NodeTag.Hr);
-        root.SetChild(hr);
-      }
-        return;
-
-      case TokenKind.BlockQuote: {
-        let blockquote = new Node(NodeTag.BlockQuote);
-        this.parseInlines(blockquote, (target as BlockQuoteToken).Tokens);
-        root.SetChild(blockquote);
-      }
-        return;
-
-      case TokenKind.IndentedCode:
-      case TokenKind.FencedCode: {
-        let code = new Node(NodeTag.Code);
-        this.inline(code, (target as IndentedCodeToken).Code);
-        root.SetChild(code);
-      }
-        return;
-
-      case TokenKind.Reference: {
-        let token = target as ReferenceToken;
-        if (token.Completed) {
-
-          return;
-        }
-
-        let paragraph = new Node(NodeTag.Paragraph);
-        this.inline(paragraph, (target as ParagraphToken).Text);
-        root.SetChild(paragraph);
-      }
-        return;
-
-      case TokenKind.Paragraph: {
-        let paragraph = new Node(NodeTag.Paragraph);
-        this.inline(paragraph, (target as ParagraphToken).Text);
-        root.SetChild(paragraph);
-      }
-        return;
-
-      case TokenKind.List:
-        return;
-
-      case TokenKind.ListItem:
-        return;
-
-      default:
-        throw new Error("Unknow TokenKind!");
-    }
-  }
-
-  private inline(root: Node, text: string) {
-    let context = {
-      index: 0,
-      text
-    };
-
-    if (text[text.length - 1] == '\n') {
-      text = text.substring(0, text.length - 1);
-    }
-
-    while (context.index < text.length) {
-      if (this.codeSpan(root, context)) {
-        continue;
-      }
-
-      this.text(root, context.text[context.index]);
-      context.index += 1;
-    }
-  }
-
-  private codeSpan(root: Node, context: { index: number, text: string }) {
-    if (context.text[context.index] != '`') {
-      return false;
-    }
-
-    context.index += 1;
-    let count = 1;
-    if (context.text[context.index + 1] == '`') {
-      count += 1;
-      context.index += 1;
-    }
-    // Check the next chacter that is alos '`'
-    root.SetChild(this.processCodeSpan(context, count));
-
-    return true;
-  }
-
-  private processCodeSpan(context: { index: number, text: string }, count: number) {
-    let { index, text } = context;
-    // Skip a whitespace at the beginning of text.
-    let frontWhiteSpace = 0;
-
-    let code = "";
-    while (text[index] == ' ') {
-      frontWhiteSpace += 1;
-      index += 1;
-    }
-
-    let backWhiteSpace = 0;
-    while (index < text.length) {
-      if (text[index] == '`') {
-        if (text[index + 1] == '`') {
-          if (count == 2) {
-            index += 2;
-            break;
-          }
-
-          // Add the current backtick to the code to avoid checking the second backtick in the next loop.
-          code += text[index];
-          index += 1;
-        } else {
-          if (count == 1) {
-            index += 1;
-            break;
-          }
-        }
-      } else if (text[index] == ' ') {
-        backWhiteSpace += 1;
-        index += 1;
-        continue;
-      } else if (text[index] == '\n') {
-        code += ' ';
-        index += 1;
-        continue;
-      }
-
-      backWhiteSpace = 0;
-      code += text[index];
-      index += 1;
-    }
-
-    if (frontWhiteSpace > 0 && backWhiteSpace > 0) {
-      frontWhiteSpace -= 1;
-      backWhiteSpace -= 1;
-    }
-
-    code = ' '.repeat(frontWhiteSpace) + code + ' '.repeat(backWhiteSpace);
-    let node = new Node(NodeTag.CodeSpan);
-    node.SetText(code);
-    context.index = index;
-    return node;
-  }
-
-  private softbreak(root: Node, context: { index: number, text: string }) {
-
-  }
-
-  private text(root: Node, c: string) {
-    let children = root.Children();
-    if (children.length == 0 || children[children.length - 1].Tag != NodeTag.Text) {
-      let text = new Node(NodeTag.Text);
-      text.SetText(c);
-      root.SetChild(text);
-      return;
-    }
-
-    let text = children[children.length - 1];
-    text.SetText(text.Text() + c);
-  }
-
-  private emphasis(root: Node, index: number, text: string) {
-    let bullet = text[index];
-    let start = 0;
-    let i = index
-    while (text[i] == bullet) {
-      i += 1;
-      start += 1;
-    }
-
-    if (start > 3) {
-      // TODO: This may a empty emphasis.
-    }
-
-    if (bullet == '_') {
-      if (text[i + 1] == ' ') {
-        i += 1;
+      if (matched) {
+        this.leafBlocks(matched.Tokens(), scanner);
       } else {
-        return index;
+        let newTokens: Tokens = [];
+        this.leafBlocks(newTokens, scanner);
+        this.tokens.push(...newTokens)
       }
     }
-
-    let emphasis = "";
-    let anthor = 0;
-    let end = 0;
-    while (i < text.length) {
-      if (bullet == '_') {
-        anthor = i;
-        while (text[anthor] == ' ' && text[i + 1] == '_') {
-          i += 1;
-          end += 1;
-        }
-
-        if (end != start) {
-          i = anthor;
-        } else {
-          let em = new Node(NodeTag.Block + end - 1);
-          em.SetText(emphasis);
-          root.SetChild(em);
-          return i;
-        }
-      }
-
-      if (bullet == '*') {
-        anthor = i;
-        while (text[i] == '*') {
-          i += 1;
-          end += 1;
-        }
-
-        if (end != start) {
-          i = anthor;
-        } else {
-          let em = new Node(NodeTag.Block + end - 1);
-          em.SetText(emphasis);
-          root.SetChild(em);
-          return i;
-        }
-      }
-
-      emphasis += text[i];
-      i += 1;
-      end = 0;
-    }
-
-    return index;
   }
 
-  private blankline(tokens: Tokens, scanner: Scanner) {
-    if (scanner.Eos()) {
-      return false;
+  private parseInlines(node: Node, tokens: Tokens) {
+    for (let token of tokens) {
+      this.inlines(node, token);
+    }
+  }
+
+  private containerBlcoks(scanner: Scanner): ContainerBlock | null {
+    let matched: ContainerBlock | null = null;
+    let token = null;
+    let tokens = this.tokens;
+    while (true) {
+      if (this.indent < this.TAB_SIZE && (token = this.blockQuote(tokens, scanner)) != null) {
+        tokens = token.Tokens();
+        matched = token;
+        continue;
+      }
+
+      break;
     }
 
-    scanner.Anchor();
-    while (!this.eol(scanner)) {
-      if (!(scanner.Consume(' ') || (scanner.Consume('\t')))) {
-        scanner.FlashBack();
-        return false;
+    return matched;
+  }
+
+  private leafBlocks(tokens: Tokens, scanner: Scanner) {
+    if (this.indent < this.TAB_SIZE) {
+      if (this.heading(tokens, scanner)) {
+        return;
+      } else if (this.setextHeading(tokens, scanner)) {
+        return;
+      } else if (this.blankline(tokens, scanner)) {
+        return;
+      } else if (this.hr(tokens, scanner)) {
+        return;
+      } else if (this.fencedCode(tokens, scanner)) {
+        return;
+      } else {
+        this.paragraph(tokens, scanner);
+        return;
+      }
+    } else {
+      if (this.indentedCode(tokens, scanner)) {
+        return;
       }
     }
 
-    tokens.push({
-      Kind: TokenKind.BlankLine
-    });
-    return true;
+    assert(false, "Could not reach here.")
   }
+
+
 
   private headingLevel(scanner: Scanner) {
     let count = 0;
@@ -378,136 +104,95 @@ export class Parser {
   }
 
   private heading(tokens: Tokens, scanner: Scanner) {
-    scanner.Anchor();
+    scanner.Push();
     let level = this.headingLevel(scanner);
     if (level == 0) {
+      scanner.Pop();
       return false;
     }
 
     if (!scanner.Consume(' ')) {
-      scanner.FlashBack();
+      scanner.Pop();
       return false;
     }
 
     let text = this.readLine(scanner);
+    this.appendToken(tokens, new HeadingToken(level, text));
 
-    tokens.push({ Kind: TokenKind.Heading, Text: text, Level: level } as HeadingToken)
+    scanner.Clear();
     return true;
   }
 
-  private getPreviousBlockquote(targets: Tokens): BlockQuoteToken | null {
-    if (targets.length == 0) {
-      return null;
-    }
-
-    let last = targets[targets.length - 1];
-    if (last.Kind == TokenKind.BlockQuote) {
-      return last as BlockQuoteToken;
-    } else if (last.Kind == TokenKind.List) {
-      return this.getPreviousBlockquote((last as ListToken).Tokens);
-    } else if (last.Kind == TokenKind.ListItem) {
-      return this.getPreviousBlockquote((last as ListItemToken).Tokens);
-    }
-
-    return null;
-  }
-
-  private blockQuote(tokens: Tokens, scanner: Scanner) {
-    let previousPrefix = 0;
-    while (scanner.Consume('>')) {
-      previousPrefix += 1;
-    }
-
-    if (previousPrefix == 0) {
+  private setextHeading(tokens: Tokens, scanner: Scanner) {
+    let lastToken = this.findLastTargetToken(TokenKind.Paragraph, tokens) as ParagraphToken;
+    if (lastToken == null) {
       return false;
     }
 
-    scanner.Consume(' ');
+    scanner.Push();
+    let bullet = scanner.Next();
 
-    let previousBlockQuote = this.getPreviousBlockquote(tokens);
-
-    if (previousBlockQuote == null) {
-      previousBlockQuote = { Kind: TokenKind.BlockQuote, Tokens: [] };
-      tokens.push(previousBlockQuote);
+    if (bullet != '=' && bullet != '-') {
+      scanner.Pop();
+      return false;
     }
 
-    for (let i = 0; i < previousPrefix - 1; i++) {
-      if (previousBlockQuote.Tokens.length > 0) {
-        let last = previousBlockQuote.Tokens[previousBlockQuote.Tokens.length - 1];
-        if (last.Kind == TokenKind.BlockQuote) {
-          previousBlockQuote = last as BlockQuoteToken;
-          continue;
-        }
-      }
-
-      let blockquote: BlockQuoteToken = { Kind: TokenKind.BlockQuote, Tokens: [] };
-      previousBlockQuote.Tokens.push(blockquote);
-      previousBlockQuote = blockquote;
-    }
-
-    let chunk = "";
-    let prefix = 0;
-    while (!scanner.Eos()) {
-      chunk += this.readLine(scanner);
-
-      while (scanner.Consume('>')) {
-        prefix += 1;
-      }
-
-      if (prefix != previousPrefix) {
-        scanner.Retreat(prefix);
+    let count = 1;
+    while (!scanner.End()) {
+      if (this.eol(scanner)) {
         break;
       }
-      prefix = 0;
+
+      if (!scanner.Consume(bullet)) {
+        break;
+      }
+
+      count += 1;
     }
 
-    let subTokens = this.parseBlocks(new Scanner(chunk));
-    if (subTokens.length == 0) {
-      // TODO: Throw an error.
+    if (count < 3) {
+      scanner.Pop();
       return false;
     }
 
-    for (let subToken of subTokens) {
-      if (subToken.Kind == TokenKind.Paragraph) {
-        let last = this.getLastParagraph(previousBlockQuote.Tokens);
-        if (last != null) {
-          last.Text += (subToken as ParagraphToken).Text;
-          continue;
-        }
-      }
-
-      previousBlockQuote.Tokens.push(subToken);
-    }
-
+    tokens.pop();
+    tokens.push(new HeadingToken(bullet == '=' ? 1 : 2, lastToken.Content()))
+    scanner.Clear();
     return true;
   }
 
-  private indentedCode(tokens: Tokens, scanner: Scanner) {
-    let line = "";
-    let whitespace = 0;
+  private blankline(tokens: Tokens, scanner: Scanner) {
+    if (scanner.End()) {
+      return false;
+    }
 
-    while (!scanner.Eos()) {
-      line += this.readLine(scanner);
-
-      whitespace = this.whiteSpace(scanner);
-      if (whitespace < TAB_SIZE) {
-        scanner.Retreat(whitespace);
+    scanner.Push();
+    while (!scanner.End()) {
+      if (this.eol(scanner)) {
         break;
       }
 
-      // Add the remaining whitespace if leading whitespace is larger than TAB_SIZE
-      line += " ".repeat(whitespace - TAB_SIZE);
+      if (!(scanner.Consume(' ') || (scanner.Consume('\t')))) {
+        scanner.Pop();
+        return false;
+      }
     }
 
-    tokens.push({ Kind: TokenKind.IndentedCode, Code: line } as IndentedCodeToken);
+    this.appendToken(tokens, new BlankLineToken());
+
+    scanner.Clear();
     return true;
   }
 
   private hr(tokens: Tokens, scanner: Scanner) {
-    scanner.Anchor();
+    scanner.Push();
     let count = 0;
 
-    while (!this.eol(scanner)) {
+    while (!scanner.End()) {
+      if (this.eol(scanner)) {
+        break;
+      }
+
       if (scanner.Consume('*') ||
         scanner.Consume('-') ||
         scanner.Consume('_')) {
@@ -519,358 +204,279 @@ export class Parser {
         continue;
       }
 
-      scanner.FlashBack();
+      scanner.Pop();
       return false;
     }
 
     if (count >= 3) {
-      tokens.push({ Kind: TokenKind.Hr });
+      this.appendToken(tokens, new HrToken());
+      scanner.Clear();
       return true;
     }
 
-    scanner.FlashBack();
+    scanner.Pop();
     return false;
   }
 
   private fencedCode(tokens: Tokens, scanner: Scanner) {
-    scanner.Anchor();
-    let bullet = ""
-    if (scanner.Consume('`')) {
-      bullet = '`';
-    } else if (scanner.Consume('~')) {
-      bullet = '~';
-    } else {
-      return false;
-    }
+    let lastToken = this.findLastTargetToken(TokenKind.FencedCode, tokens) as FencedCodeToen;
+    if (lastToken && !lastToken.Closed()) {
+      let fenced = lastToken;
+      let bullet = fenced.Bullet();
+      let count = fenced.Length();
+      let offset = fenced.Offset();
 
-    let startCount = 1;
-    let eol = true;
+      scanner.Push();
+      let endCount = 0;
+      while (!scanner.End() && scanner.Consume(bullet)) {
+        endCount += 1;
+      }
 
-    while (!this.eol(scanner)) {
-      if (scanner.Consume(bullet)) {
-        startCount += 1;
-      } else if (eol) {
-        eol = false;
-        break;
+      if (endCount >= count) {
+        this.skipLine(scanner);
+        fenced.Close();
       } else {
-        console.assert(0, "This line should not be reached.")
+        scanner.Pop();
+        fenced.SetContent(fenced.Content() + " ".repeat(Math.max(0, this.indent - offset)) + this.readLine(scanner));
       }
-    }
-
-    if (startCount < 3 || scanner.Eos()) {
-      scanner.FlashBack();
-      return false;
-    }
-
-    // Recognize the language of fenced code element.
-    let language = "";
-    if (!eol) {
-      this.whiteSpace(scanner);
-      while (!this.eol(scanner)) {
-        let peek = scanner.Peek();
-        if (peek == ' ' || peek == '\t') {
-          continue;
-        }
-
-        language += peek;
-        scanner.Advance();
-      }
-    }
-
-    // Recognize the body of fenced code element.
-    let code = "";
-    let endCount = 0;
-    while (!scanner.Eos()) {
-      let peek = scanner.Peek();
-      if (peek == bullet) {
-        while (scanner.Consume(bullet)) {
-          endCount += 1;
-        }
-
-        if (endCount >= startCount) {
-          break;
-        }
-      }
-
-      code += peek;
-      scanner.Advance();
-    }
-
-    tokens.push({ Kind: TokenKind.FencedCode, Code: code, Language: language } as FencedCodeToen);
-    return false;
-  }
-
-  // TODO: Needs refactor in the future. The code is very ugly.
-  private reference(tokens: Tokens, scanner: Scanner) {
-    let raw = "";
-    if (tokens.length >= 1) {
-      let last = tokens[tokens.length - 1];
-      if (last.Kind == TokenKind.Paragraph) {
-        return false;
-      } else if (last.Kind == TokenKind.Reference) {
-        let element = last as ReferenceToken;
-        if (element.Url == "") {
-          while (!this.eol(scanner)) {
-            let peek = scanner.Peek();
-            scanner.Advance();
-            raw += peek;
-
-            if (peek == ' ' || peek == '\t') {
-              break;
-            }
-          }
-
-          let url = "";
-          while (!this.eol(scanner)) {
-            let peek = scanner.Peek();
-            if (peek == ' ' || peek == '\t') {
-              break;
-            }
-
-            raw += peek;
-            url += peek;
-            scanner.Advance();
-          }
-
-          if (url != "") {
-            element.Url = url;
-            return true;
-          }
-
-          return false;
-        }
-
-        if (!element.Completed) {
-          if (element.Title == "") {
-            while (!this.eol(scanner)) {
-              let peek = scanner.Peek();
-              scanner.Advance();
-              raw += peek;
-
-              if (peek == ' ' || peek == '\t') {
-                break;
-              }
-
-              if (!this.eol(scanner) && peek != '\"' && peek != '\'') {
-                return false;
-              }
-            }
-            element.Bullet = scanner.Peek()!;
-            element.Raw += raw;
-          }
-
-          let bullet = element.Bullet;
-          let title = "";
-          let completed = true;
-
-          let peek = scanner.Peek();
-          while (peek != bullet) {
-            title += peek;
-            scanner.Advance();
-            peek = scanner.Peek();
-
-            if (this.eol(scanner)) {
-              completed = false;
-              break;
-            }
-          }
-
-          element.Title += title;
-
-          if (completed) {
-            scanner.Advance();
-            element.Raw += title + bullet;
-            element.Completed = true;
-            // Skip the extra white space following.
-            this.whiteSpace(scanner);
-          }
-        }
-        return true;
-      }
-    }
-
-    scanner.Anchor();
-    if (!scanner.Consume('[')) {
-      return false;
-    }
-
-    let label = "";
-    while (!scanner.Consume(']')) {
-      let peek = scanner.Peek();
-      if (peek == '\\') {
-        label += peek;
-        scanner.Advance();
-        peek = scanner.Peek();
-      }
-
-      if (peek == '\n') {
-        scanner.FlashBack();
-        return false;
-      }
-
-      label += peek;
-      scanner.Advance();
-
-      if (scanner.Eos()) {
-        scanner.FlashBack();
-        return false;
-      }
-    }
-
-    if (!scanner.Consume(':')) {
-      scanner.FlashBack();
-      return false;
-    }
-    raw = '[' + label + ']:'
-
-    raw += ' '.repeat(this.whiteSpace(scanner));
-
-    let url = "";
-    while (!this.eol(scanner)) {
-      let peek = scanner.Peek();
-      if (peek == ' ' || peek == '\t') {
-        break;
-      }
-
-      raw += peek;
-      url += peek;
-      scanner.Advance();
-    }
-
-    if (url == "") {
-      tokens.push({ Kind: TokenKind.Reference, Url: url, Title: "", Raw: raw, Completed: false } as ReferenceToken)
-      return true;
-    }
-
-    raw += ' '.repeat(this.whiteSpace(scanner));
-
-    // The title is optional.
-    let title = "";
-    let completed = true;
-    let peek = scanner.Peek();
-
-    if (!this.eol(scanner) && peek != '\"' && peek != '\'') {
-      return false;
-    }
-
-    let bullet = peek;
-    scanner.Advance();
-    peek = scanner.Peek();
-    while (peek != bullet) {
-      title += peek;
-      scanner.Advance();
-      peek = scanner.Peek();
-
-      if (this.eol(scanner)) {
-        completed = false;
-        break;
-      }
-    }
-
-    if (completed) {
-      scanner.Advance();
-      raw += bullet + title + bullet;
-      this.whiteSpace(scanner);
     } else {
-      title += '\n';
-      raw += bullet + title + '\n';
+      scanner.Push();
+      let offset = this.indent;
+      let bullet = scanner.Next();
+      if (bullet != '~' && bullet != '`') {
+        scanner.Pop();
+        return false;
+      }
+      let count = 1;
+      while (!scanner.End() && scanner.Consume(bullet)) {
+        count += 1;
+      }
+      if (count < 3) {
+        scanner.Pop();
+        return false;
+      }
+
+      // TODO: Recognize the language of code.
+      this.skipLine(scanner);
+
+      this.appendToken(tokens, new FencedCodeToen(bullet, count, offset));
+      scanner.Clear();
     }
 
-    tokens.push({ Kind: TokenKind.Reference, Url: url, Title: title, Raw: raw, Bullet: bullet, Completed: completed } as ReferenceToken)
     return true;
   }
 
-  private setextHeading(scanner: Scanner): number {
-    let bullet = scanner.Peek();
-    if (bullet != '=' && bullet != '-') {
-      return 0;
+  private indentedCode(tokens: Tokens, scanner: Scanner) {
+    let lastToken = this.lastToken(this.tokens);
+    if (lastToken && lastToken.Kind() == TokenKind.IndentedCode) {
+      let indented = lastToken as IndentedCodeToken;
+      indented.SetContent(indented.Content() + "".repeat(Math.max(0, this.indent - 4)) + this.readLine(scanner));
+    } else {
+      let indented = new IndentedCodeToken();
+      indented.SetContent("".repeat(Math.max(0, this.indent - 4)) + this.readLine(scanner));
+      this.appendToken(tokens, indented);
     }
 
-    let count = 1;
-    while (!this.eol(scanner)) {
-      if (!scanner.Consume(bullet)) {
-        return 0;
-      }
-      count += 1;
-    }
-
-    if (count >= 3) {
-      return bullet == '=' ? 1 : 2;
-    }
-    return 0;
+    return true;
   }
 
-  private getLastParagraph(targets: Tokens): ParagraphToken | null {
-    if (targets.length == 0) {
-      return null;
+  private paragraph(tokens: Tokens, scanner: Scanner) {
+    let lastToken = this.findLastTargetToken(TokenKind.Paragraph, tokens) as ParagraphToken;
+
+    let line = this.readLine(scanner);
+    if (lastToken != null) {
+      lastToken.SetContent(lastToken.Content() + line);
+      return;
     }
 
-    let last = targets[targets.length - 1];
-    if (last.Kind == TokenKind.Paragraph) {
-      return last as ParagraphToken;
-    } else if (last.Kind == TokenKind.BlockQuote) {
-      return this.getLastParagraph((last as BlockQuoteToken).Tokens);
-    } else if (last.Kind == TokenKind.List) {
-      return this.getLastParagraph((last as ListToken).Tokens);
-    } else if (last.Kind == TokenKind.ListItem) {
-      return this.getLastParagraph((last as ListItemToken).Tokens);
+    this.appendToken(tokens, new ParagraphToken(line));
+  }
+
+  private blockQuote(tokens: Tokens, scanner: Scanner) {
+    let lastToken: ContainerBlock | null = null;
+    while (scanner.Consume('>')) {
+      lastToken = this.findLastTargetToken(TokenKind.BlockQuote, tokens) as BlockQuoteToken;
+      if (lastToken == null) {
+        lastToken = new BlockQuoteToken();
+        this.appendToken(tokens, lastToken);
+      }
+      tokens = lastToken.Tokens();
+    }
+
+    if (lastToken != null) {
+      scanner.Consume(' ');
+    }
+
+    if (lastToken) {
+      this.indent = this.whiteSpace(scanner);
+    }
+    return lastToken;
+  }
+
+  private inlines(root: Node, token: Token) {
+    let node = null;
+    switch (token.Kind()) {
+      case TokenKind.BlankLine:
+        return;
+      case TokenKind.Heading: {
+        let heading = token as HeadingToken;
+        switch (heading.Level()) {
+          case 1:
+            node = new Node(NodeTag.H1);
+            break;
+
+          case 2:
+            node = new Node(NodeTag.H2);
+            break
+
+          case 3:
+            node = new Node(NodeTag.H3);
+            break;
+
+          case 4:
+            node = new Node(NodeTag.H4);
+            break;
+
+          case 5:
+            node = new Node(NodeTag.H5);
+            break;
+
+          case 6:
+            node = new Node(NodeTag.H6);
+            break;
+        }
+
+        if (node == null) {
+          throw new Error("Unknown heading level!");
+        }
+
+        // TODO:
+        this.inline(node, heading.Content());
+      }
+        break;
+      case TokenKind.Hr: {
+        root.SetChild(new Node(NodeTag.Hr));
+      }
+        break;
+      case TokenKind.BlockQuote: {
+        node = new Node(NodeTag.BlockQuote);
+        let blockquote = token as BlockQuoteToken;
+        this.parseInlines(node, blockquote.Tokens());
+      }
+        break;
+      case TokenKind.IndentedCode:
+      case TokenKind.FencedCode: {
+        let leafBlock = token as LeafBlock;
+        let node = new Node(NodeTag.Code);
+        node.SetText(leafBlock.Content());
+      }
+        break;
+      case TokenKind.Reference: {
+        // TODO:
+      }
+        break;
+      case TokenKind.Paragraph: {
+        let paragraph = token as ParagraphToken;
+        let node = new Node(NodeTag.Paragraph);
+        node.SetText(paragraph.Content());
+      }
+        break;
+      case TokenKind.List: {
+        // TODO:
+      }
+        break;
+      case TokenKind.ListItem: {
+        // TODO:
+      }
+        break;
+      default: {
+        throw new Error("Unknown token kind!");
+      }
+    }
+
+    root.SetChild(node!);
+  }
+
+  private inline(node: Node, content: string) {
+    let text = new Node(NodeTag.Text);
+    text.SetText(content);
+    node.SetChild(text);
+  }
+
+
+
+  private appendToken(tokens: Tokens, token: Token) {
+    // TODO: check the last token is paragraph or not.
+
+    tokens.push(token);
+  }
+
+  private lastToken(tokens: Tokens) {
+    if (tokens.length > 0) {
+      return tokens[tokens.length - 1];
     }
 
     return null;
   }
 
-  private paragraph(tokens: Tokens, scanner: Scanner) {
-    let text = this.readLine(scanner);
+  private findLastTargetToken(kind: TokenKind, tokens: Tokens): Token | null {
+    let lastToken = this.lastToken(tokens);
 
-    let last = this.getLastParagraph(tokens);
-    if (!last) {
-      tokens.push({ Kind: TokenKind.Paragraph, Text: text } as ParagraphToken);
-    } else {
-      let level = this.setextHeading(scanner);
-      if (level == 0) {
-        (last as ParagraphToken).Text += text;
-      } else {
-        text = (last as ParagraphToken).Text + text;
-        tokens.pop();
-        tokens.push({ Kind: TokenKind.Heading, Level: level, Text: text } as HeadingToken);
+    if (lastToken) {
+      if (lastToken.Kind() == kind) {
+        return lastToken;
+      }
+
+      if (isContainerBlock(lastToken)) {
+        return this.findLastTargetToken(kind, lastToken.Tokens());
       }
     }
 
-    return true;
+    return null;
   }
 
-  private list(tokens: Tokens, scanner: Scanner) {
-    // TODO: Not Implement!
-    return false;
+  private readLine(scanner: Scanner) {
+    let line = "";
+    while (!scanner.End()) {
+      if (this.eol(scanner)) {
+        line += "\n";
+        break;
+      }
+
+      line += scanner.Peek();
+      scanner.Skip();
+    }
+
+    return line;
   }
 
-  private listItem(tokens: Tokens, scanner: Scanner) {
-    // TODO: Not Implement!
+  private skipLine(scanner: Scanner) {
+    while (!(scanner.End() || this.eol(scanner))) {
+      scanner.Skip();
+    }
   }
 
   private eol(scanner: Scanner) {
-    if (scanner.Eos()) {
+    assert(!scanner.End());
+
+    let peek = scanner.Peek();
+    if (peek == '\n') {
+      scanner.Skip();
+      return true;
+    } else if (peek == '\r') {
+      if (scanner.Next() == '\n') {
+        scanner.Skip();
+      }
+
       return true;
     }
 
-    // TODO: Resume that the end of line is '\n'.
-    // The end of line can be specified by ParserConfig.
-    if (!scanner.Consume(EOL.at(0)!)) {
-      return false;
-    }
-
-    if (EOL.length > 1) {
-      if (!scanner.Consume(EOL.at(1)!)) {
-        return false;
-      }
-    }
-
-    return true;
+    return false;
   }
 
   private whiteSpace(scanner: Scanner): number {
     let count = 0;
-    while (!scanner.Eos()) {
+    while (!scanner.End()) {
       if (scanner.Consume(' ')) {
         count += 1;
       } else if (scanner.Consume('\t')) {
@@ -883,25 +489,10 @@ export class Parser {
     return count;
   }
 
-  private readLine(scanner: Scanner, unless: number = -1) {
-    let buffer = "";
-    while (!this.eol(scanner)) {
-      let next = scanner.Next()!;
 
-      if (next == '\\') {
-        buffer += next;
-        continue;
-      }
+  private input: string = "";
+  private tokens: Tokens = [];
+  private indent: number = 0;
 
-      if (unless != -1 && next.charCodeAt(0) == unless) {
-        break;
-      }
-      buffer += next;
-    }
-
-    buffer += '\n';
-    return buffer;
-  }
-
-  private config: PasrerConfig;
+  private TAB_SIZE: number = 4;
 }

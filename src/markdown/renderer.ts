@@ -67,7 +67,7 @@ export class HTMLRender implements Render {
       case NodeTag.SoftBreak:
         return " ";
       default:
-        return "";
+        throw new Error("Unknown node tag!");
     }
   }
 
@@ -115,7 +115,7 @@ export class HTMLRender implements Render {
       case NodeTag.SoftBreak:
         return "";
       default:
-        return "";
+        throw new Error("Unknown node tag!");
     }
   }
 }

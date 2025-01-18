@@ -12,64 +12,249 @@ export enum TokenKind {
   ListItem,
 }
 
+export class TokenSpan {
+}
+
 export interface Token {
-  readonly Kind: TokenKind;
+  Kind(): TokenKind;
 }
 
 export type Tokens = Token[];
 
-export interface HeadingToken extends Token {
-  Text: string,
-  Level: number
+export interface LeafBlock extends Token {
+  Content(): string;
+  SetContent(content: string): void;
 }
 
-export interface HrToken extends Token {
+export interface ContainerBlock extends Token {
+  Tokens(): Tokens;
+  SetTokens(tokens: Tokens): void;
 }
 
-export interface BlockQuoteToken extends Token {
-  Tokens: Tokens;
+export class HeadingToken implements LeafBlock {
+  constructor(level: number, content: string) {
+    this.level = level;
+    this.content = content;
+  }
+
+  Kind(): TokenKind {
+    return TokenKind.Heading;
+  }
+
+  Content(): string {
+    return this.content;
+  }
+
+  SetContent(content: string): void {
+    this.content = content;
+  }
+
+  Level() {
+    return this.level;
+  }
+
+  private level: number;
+  private content: string;
 }
 
-export interface BlankLineToken extends Token {
+export class HrToken implements LeafBlock {
+  Kind(): TokenKind {
+    return TokenKind.Hr;
+  }
+
+  Content(): string {
+    return "";
+  }
+
+  SetContent(_: string): void {
+  }
 }
 
-export interface IndentedCodeToken extends Token {
-  Code: string;
+export class BlankLineToken implements LeafBlock {
+  Kind(): TokenKind {
+    return TokenKind.BlankLine;
+  }
+
+  Content(): string {
+    return "";
+  }
+
+  SetContent(_: string): void {
+  }
 }
 
-export enum SupportedLanguage {
-  C,
-  CXX,
-  Java,
-  Python,
-  Rust,
-  Javascript,
-  Typescript,
+export class IndentedCodeToken implements LeafBlock {
+  Kind(): TokenKind {
+    return TokenKind.IndentedCode;
+  }
+
+  Content(): string {
+    return this.content;
+  }
+
+  SetContent(content: string): void {
+    this.content = content;
+  }
+
+  private content: string = "";
 }
 
-export interface FencedCodeToen extends Token {
-  Code: string;
-  Language: string; // TODO: Change type of `Language` from string to enum.
+export class FencedCodeToen implements LeafBlock {
+  constructor(bullet: string, count: number, offset: number, language?: string) {
+    this.bullet = bullet;
+    this.length = count;
+    this.offset = offset;
+    if (language) {
+      this.language = language;
+    }
+  }
+
+  Kind(): TokenKind {
+    return TokenKind.FencedCode;
+  }
+
+  Content(): string {
+    return this.content;
+  }
+
+  SetContent(content: string): void {
+    this.content = content;
+  }
+
+  Lanuange(): string {
+    return this.language;
+  }
+
+  Length(): number {
+    return this.length;
+  }
+
+  Offset(): number {
+    return this.offset;
+  }
+
+  Bullet(): string {
+    return this.bullet;
+  }
+
+  Closed(): boolean {
+    return this.closed;
+  }
+
+  Close(): void {
+    this.closed = true;
+  }
+
+  private content: string = "";
+  private language: string = "";
+  private length: number;
+  private offset: number;
+  private bullet: string;
+  private closed: boolean = false;
 }
 
-export interface ReferenceToken extends Token {
-  Label: string;
-  Url: string;
-  Title: string;
-  Bullet: string;
-  Raw: string,
-  Completed: boolean;
+export class ReferenceToken implements LeafBlock {
+  Kind(): TokenKind {
+    return TokenKind.Reference;
+  }
+
+  Content(): string {
+    throw new Error("Method not implemented.");
+  }
+  SetContent(content: string): void {
+    throw new Error("Method not implemented.");
+  }
 }
 
-export interface ParagraphToken extends Token {
-  Text: string;
+export class ParagraphToken implements LeafBlock {
+  constructor(content: string) {
+    this.content = content;
+  }
+
+  Kind(): TokenKind {
+    return TokenKind.Paragraph;
+  }
+
+  Content(): string {
+    return this.content;
+  }
+  SetContent(content: string): void {
+    this.content = content;
+  }
+
+  private content: string;
 }
 
-export interface ListToken extends Token {
-  SequentialNumber: number;
-  Tokens: ListItemToken[];
+export class BlockQuoteToken implements ContainerBlock {
+  Kind(): TokenKind {
+    return TokenKind.BlockQuote;
+  }
+
+  Tokens(): Tokens {
+    return this.tokens;
+  }
+
+  SetTokens(tokens: Tokens): void {
+    this.tokens = tokens;
+  }
+
+  private tokens: Tokens = [];
 }
 
-export interface ListItemToken extends Token {
-  Tokens: Tokens;
+export class _ListToken implements ContainerBlock {
+  Kind(): TokenKind {
+    return TokenKind.List;
+  }
+
+  Tokens(): Tokens {
+    return this.tokens;
+  }
+
+  SetTokens(tokens: Tokens): void {
+    this.tokens = tokens;
+  }
+
+  private tokens: Tokens = [];
+}
+
+export class _ListItemToken implements ContainerBlock {
+  Kind(): TokenKind {
+    return TokenKind.ListItem;
+  }
+
+  Tokens(): Tokens {
+    return this.tokens;
+  }
+
+  SetTokens(tokens: Tokens): void {
+    this.tokens = tokens;
+  }
+
+  private tokens: Tokens = [];
+}
+
+export function isLeafBlock(token: Token): token is LeafBlock {
+  switch (token.Kind()) {
+    case TokenKind.BlankLine:
+    case TokenKind.Heading:
+    case TokenKind.Hr:
+    case TokenKind.IndentedCode:
+    case TokenKind.FencedCode:
+    case TokenKind.Reference:
+    case TokenKind.Paragraph:
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function isContainerBlock(token: Token): token is ContainerBlock {
+  switch (token.Kind()) {
+    case TokenKind.BlockQuote:
+    case TokenKind.List:
+    case TokenKind.ListItem:
+      return true;
+    default:
+      return false;
+  }
 }
