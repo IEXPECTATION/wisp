@@ -1,5 +1,5 @@
 import { Scanner } from "./scanner";
-import { BlankLineToken, BlockQuoteToken, ContainerBlock, FencedCodeToen, HeadingToken, HrToken, IndentedCodeToken, ParagraphToken, Token, TokenKind, Tokens, LeafBlock, TokenSpan, isLeafBlock, isContainerBlock } from "./tokens";
+import { BlankLineToken, BlockQuoteToken, ContainerBlock, FencedCodeToen, HeadingToken, HrToken, IndentedCodeToken, ParagraphToken, Token, TokenKind, Tokens, LeafBlock, isContainerBlock, ListToken as ListToken, OrderedListItemToken, UnorderedListItemToken } from "./tokens";
 import { Node, NodeTag } from "./nodes";
 import { assert } from "console";
 
@@ -16,6 +16,7 @@ export class Parser {
   Parse(input: string) {
     this.input = input;
     this.parseBlocks();
+    return this.tokens;
     let document = new Node(NodeTag.Document);
     this.parseInlines(document, this.tokens);
     return document;
@@ -29,14 +30,7 @@ export class Parser {
       this.indent = this.whiteSpace(scanner);
 
       matched = this.containerBlcoks(scanner);
-
-      if (matched) {
-        this.leafBlocks(matched.Tokens(), scanner);
-      } else {
-        let newTokens: Tokens = [];
-        this.leafBlocks(newTokens, scanner);
-        this.tokens.push(...newTokens)
-      }
+      this.leafBlocks(matched != null ? matched.Tokens() : this.tokens, scanner);
     }
   }
 
@@ -55,6 +49,8 @@ export class Parser {
         tokens = token.Tokens();
         matched = token;
         continue;
+      } else if ((token = this.List(tokens, scanner)) != null) {
+        return token;
       }
 
       break;
@@ -85,10 +81,128 @@ export class Parser {
       }
     }
 
-    assert(false, "Could not reach here.")
+    assert(false, "Unreach code.")
   }
 
 
+
+  private blockQuote(tokens: Tokens, scanner: Scanner) {
+    let lastToken = null;
+    while (scanner.Consume('>')) {
+      lastToken = this.findLastTargetToken(TokenKind.BlockQuote, tokens) as BlockQuoteToken;
+      if (lastToken == null) {
+        lastToken = new BlockQuoteToken();
+        this.appendToken(tokens, lastToken);
+      }
+      tokens = lastToken.Tokens();
+    }
+
+    if (lastToken != null) {
+      scanner.Consume(' ');
+    }
+
+    if (lastToken) {
+      this.indent = this.whiteSpace(scanner);
+    }
+    return lastToken;
+  }
+
+  private List(tokens: Tokens, scanner: Scanner) {
+    // Check this line is a list
+    let item = null;
+    let lastToken = this.findLastTargetToken(TokenKind.List, tokens) as ListToken;
+    if (lastToken) {
+      item = this.lastToken(lastToken.Tokens());
+
+      if (item?.Kind() == TokenKind.OrderedListItem) {
+        if (this.indent > (item as OrderedListItemToken).Offset()) {
+          // this 
+        }
+
+      } else if (item?.Kind() == TokenKind.UnorderedListItem) {
+
+      } else {
+        throw new Error("No list item inside a list token or it is not a list item!");
+      }
+
+    } else {
+      // If there isn't a list, we should check the indent is enough to indented code.
+      if (this.indent >= this.TAB_SIZE) {
+        return null;
+      }
+
+      let list = new ListToken();
+      this.appendToken(tokens, list);
+
+      item = this.orderedListItem(scanner);
+      if (item) {
+        this.appendToken(list.Tokens(), item);
+        return item;
+      }
+
+      item = this.unorderedListItem(scanner);
+      if (item) {
+        return item;
+      }
+
+      return null;
+    }
+  }
+
+  private orderedListItem(scanner: Scanner) {
+    scanner.Push();
+
+    let peek = scanner.Peek();
+    if ("0123456789".includes(peek)) {
+      let skipZero = true;
+      let number = "";
+      while (!scanner.End()) {
+        if (skipZero) {
+          if (peek == '0') {
+            peek = scanner.Next();
+            continue;
+          }
+
+          skipZero = false;
+        }
+
+        number += peek;
+        if (number.length > 9) {
+          throw new Error("The start number of ordered list should be less than nigh digits!")
+        }
+
+        peek = scanner.Next();
+        if (!"0123456789".includes(peek)) {
+          break;
+        }
+      }
+
+      if (!scanner.Consume('.') && !scanner.Consume(')')) {
+        scanner.Pop();
+        return null;
+      }
+
+      if (!scanner.Consume(' ')) {
+        scanner.Pop();
+        return null;
+      }
+
+      let offset = number.length + 2;
+      this.indent = this.whiteSpace(scanner);
+      if (this.indent < this.TAB_SIZE) {
+        offset += this.indent;
+      }
+
+      return new OrderedListItemToken(Number.parseInt(number), offset);
+    }
+
+    scanner.Pop();
+    return null;
+  }
+
+  private unorderedListItem(scanner: Scanner) {
+    return null;
+  }
 
   private headingLevel(scanner: Scanner) {
     let count = 0;
@@ -267,13 +381,13 @@ export class Parser {
   }
 
   private indentedCode(tokens: Tokens, scanner: Scanner) {
-    let lastToken = this.lastToken(this.tokens);
+    let lastToken = this.findLastTargetToken(TokenKind.IndentedCode, tokens);
     if (lastToken && lastToken.Kind() == TokenKind.IndentedCode) {
       let indented = lastToken as IndentedCodeToken;
-      indented.SetContent(indented.Content() + "".repeat(Math.max(0, this.indent - 4)) + this.readLine(scanner));
+      indented.SetContent(indented.Content() + " ".repeat(Math.max(0, this.indent - 4)) + this.readLine(scanner));
     } else {
       let indented = new IndentedCodeToken();
-      indented.SetContent("".repeat(Math.max(0, this.indent - 4)) + this.readLine(scanner));
+      indented.SetContent(" ".repeat(Math.max(0, this.indent - 4)) + this.readLine(scanner));
       this.appendToken(tokens, indented);
     }
 
@@ -281,7 +395,7 @@ export class Parser {
   }
 
   private paragraph(tokens: Tokens, scanner: Scanner) {
-    let lastToken = this.findLastTargetToken(TokenKind.Paragraph, tokens) as ParagraphToken;
+    let lastToken = this.findLastTargetToken(TokenKind.Paragraph, tokens, true) as ParagraphToken;
 
     let line = this.readLine(scanner);
     if (lastToken != null) {
@@ -289,28 +403,11 @@ export class Parser {
       return;
     }
 
-    this.appendToken(tokens, new ParagraphToken(line));
+    tokens.push(new ParagraphToken(line));
   }
 
-  private blockQuote(tokens: Tokens, scanner: Scanner) {
-    let lastToken: ContainerBlock | null = null;
-    while (scanner.Consume('>')) {
-      lastToken = this.findLastTargetToken(TokenKind.BlockQuote, tokens) as BlockQuoteToken;
-      if (lastToken == null) {
-        lastToken = new BlockQuoteToken();
-        this.appendToken(tokens, lastToken);
-      }
-      tokens = lastToken.Tokens();
-    }
-
-    if (lastToken != null) {
-      scanner.Consume(' ');
-    }
-
-    if (lastToken) {
-      this.indent = this.whiteSpace(scanner);
-    }
-    return lastToken;
+  private reference(paragraph: string) {
+    return null;
   }
 
   private inlines(root: Node, token: Token) {
@@ -351,11 +448,11 @@ export class Parser {
         }
 
         // TODO:
-        this.inline(node, heading.Content());
+        this.inline(node, heading.Content().trimEnd());
       }
         break;
       case TokenKind.Hr: {
-        root.SetChild(new Node(NodeTag.Hr));
+        node = new Node(NodeTag.Hr);
       }
         break;
       case TokenKind.BlockQuote: {
@@ -367,8 +464,10 @@ export class Parser {
       case TokenKind.IndentedCode:
       case TokenKind.FencedCode: {
         let leafBlock = token as LeafBlock;
-        let node = new Node(NodeTag.Code);
-        node.SetText(leafBlock.Content());
+        node = new Node(NodeTag.Code);
+        let text = new Node(NodeTag.Text);
+        text.SetText(leafBlock.Content());
+        node.SetChild(text);
       }
         break;
       case TokenKind.Reference: {
@@ -377,16 +476,20 @@ export class Parser {
         break;
       case TokenKind.Paragraph: {
         let paragraph = token as ParagraphToken;
-        let node = new Node(NodeTag.Paragraph);
-        node.SetText(paragraph.Content());
+        node = new Node(NodeTag.Paragraph);
+        this.inline(node, paragraph.Content().trimEnd());
       }
         break;
       case TokenKind.List: {
         // TODO:
       }
         break;
-      case TokenKind.ListItem: {
+      case TokenKind.OrderedListItem: {
         // TODO:
+      }
+        return;
+      case TokenKind.UnorderedListItem: {
+
       }
         break;
       default: {
@@ -406,7 +509,16 @@ export class Parser {
 
 
   private appendToken(tokens: Tokens, token: Token) {
-    // TODO: check the last token is paragraph or not.
+    let paragraph = this.findLastTargetToken(TokenKind.Paragraph, tokens, true) as ParagraphToken;
+    if (paragraph) {
+      // TODO: Check this paragraph is a reference link defination.
+      let ref = this.reference(paragraph.Content());
+      if (ref) {
+        let parent = this.findParentOfTargetToken(paragraph, tokens)!;
+        parent.pop();
+        parent.push(ref);
+      }
+    }
 
     tokens.push(token);
   }
@@ -419,7 +531,7 @@ export class Parser {
     return null;
   }
 
-  private findLastTargetToken(kind: TokenKind, tokens: Tokens): Token | null {
+  private findLastTargetToken(kind: TokenKind, tokens: Tokens, deeply: boolean = false): Token | null {
     let lastToken = this.lastToken(tokens);
 
     if (lastToken) {
@@ -427,12 +539,25 @@ export class Parser {
         return lastToken;
       }
 
-      if (isContainerBlock(lastToken)) {
+      if (deeply && isContainerBlock(lastToken)) {
         return this.findLastTargetToken(kind, lastToken.Tokens());
       }
     }
 
     return null;
+  }
+
+  private findParentOfTargetToken(token: Token, tokens: Tokens): Tokens | null {
+    let lastToken = this.lastToken(tokens);
+    if (lastToken == token) {
+      return tokens;
+    }
+
+    if (lastToken == null || !isContainerBlock(lastToken)) {
+      return null
+    }
+
+    return this.findParentOfTargetToken(token, lastToken.Tokens());
   }
 
   private readLine(scanner: Scanner) {
@@ -496,3 +621,9 @@ export class Parser {
 
   private TAB_SIZE: number = 4;
 }
+
+
+let input = "1. abc"
+let parser = new Parser();
+let tokens = parser.Parse(input);
+console.dir(tokens, { depth: Infinity });

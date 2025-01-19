@@ -49,7 +49,7 @@ export class HTMLRender implements Render {
       case NodeTag.BlockItalic:
         return "<em><strong>";
       case NodeTag.Code:
-        return "<pre>";
+        return "<pre><code>";
       case NodeTag.CodeSpan:
         return "<code>" + target.Text();
       case NodeTag.Link:
@@ -97,7 +97,7 @@ export class HTMLRender implements Render {
       case NodeTag.BlockItalic:
         return "</strong></em>" + EOL;
       case NodeTag.Code:
-        return "</pre>" + EOL;
+        return "</code></pre>" + EOL;
       case NodeTag.CodeSpan:
         return "</code>";
       case NodeTag.Link:

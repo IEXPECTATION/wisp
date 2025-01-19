@@ -9,7 +9,8 @@ export enum TokenKind {
   Reference,
   Paragraph,
   List,
-  ListItem,
+  OrderedListItem,
+  UnorderedListItem,
 }
 
 export class TokenSpan {
@@ -201,7 +202,7 @@ export class BlockQuoteToken implements ContainerBlock {
   private tokens: Tokens = [];
 }
 
-export class _ListToken implements ContainerBlock {
+export class ListToken implements ContainerBlock {
   Kind(): TokenKind {
     return TokenKind.List;
   }
@@ -214,12 +215,16 @@ export class _ListToken implements ContainerBlock {
     this.tokens = tokens;
   }
 
+  constructor() {
+  }
+
   private tokens: Tokens = [];
+
 }
 
-export class _ListItemToken implements ContainerBlock {
+export class OrderedListItemToken implements ContainerBlock {
   Kind(): TokenKind {
-    return TokenKind.ListItem;
+    return TokenKind.OrderedListItem;
   }
 
   Tokens(): Tokens {
@@ -230,8 +235,55 @@ export class _ListItemToken implements ContainerBlock {
     this.tokens = tokens;
   }
 
+  constructor(startNumber: number, offset: number) {
+    this.startNumber = startNumber;
+    this.offset = offset;
+  }
+
+  StartNumber() {
+    return this.startNumber;
+  }
+
+  Offset() {
+    return this.offset;
+  }
+
   private tokens: Tokens = [];
+  private startNumber: number;
+  private offset: number;
 }
+
+export class UnorderedListItemToken implements ContainerBlock {
+  Kind(): TokenKind {
+    return TokenKind.OrderedListItem;
+  }
+
+  Tokens(): Tokens {
+    return this.tokens;
+  }
+
+  SetTokens(tokens: Tokens): void {
+    this.tokens = tokens;
+  }
+
+  constructor(bullet: string, offset: number) {
+    this.bullet = bullet;
+    this.offset = offset;
+  }
+
+  Bullet() {
+    return this.bullet;
+  }
+
+  Offset() {
+    this.offset;
+  }
+
+  private tokens: Tokens = [];
+  private bullet: string;
+  private offset: number;
+}
+
 
 export function isLeafBlock(token: Token): token is LeafBlock {
   switch (token.Kind()) {
@@ -252,7 +304,8 @@ export function isContainerBlock(token: Token): token is ContainerBlock {
   switch (token.Kind()) {
     case TokenKind.BlockQuote:
     case TokenKind.List:
-    case TokenKind.ListItem:
+    case TokenKind.OrderedListItem:
+    case TokenKind.UnorderedListItem:
       return true;
     default:
       return false;
