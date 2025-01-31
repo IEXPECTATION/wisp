@@ -8,9 +8,9 @@ export enum TokenKind {
   FencedCode,
   Reference,
   Paragraph,
-  List,
-  OrderedListItem,
-  UnorderedListItem,
+  OrderedList,
+  UnorderedList,
+  ListItem,
 }
 
 export class TokenSpan {
@@ -162,6 +162,7 @@ export class ReferenceToken implements LeafBlock {
   Content(): string {
     throw new Error("Method not implemented.");
   }
+
   SetContent(content: string): void {
     throw new Error("Method not implemented.");
   }
@@ -202,9 +203,9 @@ export class BlockQuoteToken implements ContainerBlock {
   private tokens: Tokens = [];
 }
 
-export class ListToken implements ContainerBlock {
+export class OrderedListToken implements ContainerBlock {
   Kind(): TokenKind {
-    return TokenKind.List;
+    return TokenKind.OrderedList;
   }
 
   Tokens(): Tokens {
@@ -215,47 +216,27 @@ export class ListToken implements ContainerBlock {
     this.tokens = tokens;
   }
 
-  constructor() {
-  }
-
-  private tokens: Tokens = [];
-
-}
-
-export class OrderedListItemToken implements ContainerBlock {
-  Kind(): TokenKind {
-    return TokenKind.OrderedListItem;
-  }
-
-  Tokens(): Tokens {
-    return this.tokens;
-  }
-
-  SetTokens(tokens: Tokens): void {
-    this.tokens = tokens;
-  }
-
-  constructor(startNumber: number, offset: number) {
+  constructor(startNumber: string, delimitation: string) {
     this.startNumber = startNumber;
-    this.offset = offset;
+    this.delimitation = delimitation;
   }
 
   StartNumber() {
     return this.startNumber;
   }
 
-  Offset() {
-    return this.offset;
+  Delimitation() {
+    return this.delimitation;
   }
 
   private tokens: Tokens = [];
-  private startNumber: number;
-  private offset: number;
+  private startNumber: string;
+  private delimitation: string;
 }
 
-export class UnorderedListItemToken implements ContainerBlock {
+export class UnorderedListToken implements ContainerBlock {
   Kind(): TokenKind {
-    return TokenKind.OrderedListItem;
+    return TokenKind.UnorderedList;
   }
 
   Tokens(): Tokens {
@@ -266,22 +247,61 @@ export class UnorderedListItemToken implements ContainerBlock {
     this.tokens = tokens;
   }
 
-  constructor(bullet: string, offset: number) {
+  constructor(bullet: string) {
     this.bullet = bullet;
-    this.offset = offset;
   }
 
   Bullet() {
     return this.bullet;
   }
 
+  private tokens: Tokens = [];
+  private bullet: string;
+}
+
+export class ListItemToken implements ContainerBlock {
+  Kind(): TokenKind {
+    return TokenKind.ListItem;
+  }
+
+  Tokens(): Tokens {
+    return this.tokens;
+  }
+
+  SetTokens(tokens: Tokens): void {
+    this.tokens = tokens;
+  }
+
+  constructor(offset: number) {
+    this.offset = offset;
+  }
+
   Offset() {
-    this.offset;
+    return this.offset;
+  }
+
+  Tight() {
+    return this.tight;
+  }
+
+  SetTight(flag: boolean) {
+    this.tight = flag;
   }
 
   private tokens: Tokens = [];
-  private bullet: string;
   private offset: number;
+  private tight: boolean = true;
+}
+
+export type orderedListItemPreifx = {
+  startNumber: string,
+  delimitation: string,
+  offset: number
+}
+
+export type unorderedListItemPrefix = {
+  bullet: string,
+  offset: number,
 }
 
 
@@ -303,9 +323,9 @@ export function isLeafBlock(token: Token): token is LeafBlock {
 export function isContainerBlock(token: Token): token is ContainerBlock {
   switch (token.Kind()) {
     case TokenKind.BlockQuote:
-    case TokenKind.List:
-    case TokenKind.OrderedListItem:
-    case TokenKind.UnorderedListItem:
+    case TokenKind.OrderedList:
+    case TokenKind.UnorderedList:
+    case TokenKind.ListItem:
       return true;
     default:
       return false;

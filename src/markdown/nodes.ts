@@ -18,6 +18,7 @@ export enum NodeTag {
   Paragraph,
   Ol,
   Ul,
+  Li,
   Image,
   SoftBreak,
 };

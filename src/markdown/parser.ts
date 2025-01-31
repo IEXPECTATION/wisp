@@ -1,7 +1,8 @@
 import { Scanner } from "./scanner";
-import { BlankLineToken, BlockQuoteToken, ContainerBlock, FencedCodeToen, HeadingToken, HrToken, IndentedCodeToken, ParagraphToken, Token, TokenKind, Tokens, LeafBlock, isContainerBlock, ListToken as ListToken, OrderedListItemToken, UnorderedListItemToken } from "./tokens";
+import { BlankLineToken, BlockQuoteToken, ContainerBlock, FencedCodeToen, HeadingToken, HrToken, IndentedCodeToken, ParagraphToken, Token, TokenKind, Tokens, LeafBlock, isContainerBlock, ListItemToken, orderedListItemPreifx, unorderedListItemPrefix, OrderedListToken, UnorderedListToken } from "./tokens";
 import { Node, NodeTag } from "./nodes";
 import { assert } from "console";
+import { HTMLRender } from "./renderer";
 
 export interface PasrerConfig {
   TAB_SIZE?: number;
@@ -16,7 +17,7 @@ export class Parser {
   Parse(input: string) {
     this.input = input;
     this.parseBlocks();
-    return this.tokens;
+    // return this.tokens;
     let document = new Node(NodeTag.Document);
     this.parseInlines(document, this.tokens);
     return document;
@@ -50,7 +51,9 @@ export class Parser {
         matched = token;
         continue;
       } else if ((token = this.List(tokens, scanner)) != null) {
-        return token;
+        tokens = token.Tokens();
+        matched = token;
+        continue;
       }
 
       break;
@@ -60,6 +63,10 @@ export class Parser {
   }
 
   private leafBlocks(tokens: Tokens, scanner: Scanner) {
+    if (scanner.End()) {
+      return;
+    }
+
     if (this.indent < this.TAB_SIZE) {
       if (this.heading(tokens, scanner)) {
         return;
@@ -108,100 +115,198 @@ export class Parser {
   }
 
   private List(tokens: Tokens, scanner: Scanner) {
-    // Check this line is a list
-    let item = null;
-    let lastToken = this.findLastTargetToken(TokenKind.List, tokens) as ListToken;
-    if (lastToken) {
-      item = this.lastToken(lastToken.Tokens());
+    let list = null;
 
-      if (item?.Kind() == TokenKind.OrderedListItem) {
-        if (this.indent > (item as OrderedListItemToken).Offset()) {
-          // this 
+    list = this.orderedList(tokens, scanner);
+    if (list) {
+      return list;
+    }
+
+    list = this.unorderedList(tokens, scanner);
+    if (list) {
+      return list;
+    }
+
+    return null;
+  }
+
+  private orderedList(tokens: Tokens, scanner: Scanner) {
+    let list = this.findLastTargetToken(TokenKind.OrderedList, tokens) as OrderedListToken;
+    if (list) {
+      let item = this.lastToken(list.Tokens())! as ListItemToken;
+
+      // Skip all blank lines.
+      while (this.blankline(item.Tokens(), scanner)) {
+        this.indent = this.whiteSpace(scanner);
+      }
+
+      // If the last token is a ordered list, we should check the offset is equal or not.
+      if (this.indent >= item.Offset()) {
+        // This line is belong to this list, return the last list item.
+        if (this.lastToken(item.Tokens())?.Kind() == TokenKind.BlankLine) {
+          item.SetTight(false);
         }
 
-      } else if (item?.Kind() == TokenKind.UnorderedListItem) {
-
-      } else {
-        throw new Error("No list item inside a list token or it is not a list item!");
-      }
-
-    } else {
-      // If there isn't a list, we should check the indent is enough to indented code.
-      if (this.indent >= this.TAB_SIZE) {
-        return null;
-      }
-
-      let list = new ListToken();
-      this.appendToken(tokens, list);
-
-      item = this.orderedListItem(scanner);
-      if (item) {
-        this.appendToken(list.Tokens(), item);
+        this.indent -= item.Offset();
         return item;
       }
+    }
 
-      item = this.unorderedListItem(scanner);
-      if (item) {
-        return item;
-      }
-
+    // If there are only blank lines flowering the list item and we are now at the end of input.
+    // So we should return null.
+    if (scanner.End()) {
       return null;
     }
-  }
 
-  private orderedListItem(scanner: Scanner) {
-    scanner.Push();
-
-    let peek = scanner.Peek();
-    if ("0123456789".includes(peek)) {
-      let skipZero = true;
-      let number = "";
-      while (!scanner.End()) {
-        if (skipZero) {
-          if (peek == '0') {
-            peek = scanner.Next();
-            continue;
-          }
-
-          skipZero = false;
-        }
-
-        number += peek;
-        if (number.length > 9) {
-          throw new Error("The start number of ordered list should be less than nigh digits!")
-        }
-
-        peek = scanner.Next();
-        if (!"0123456789".includes(peek)) {
-          break;
-        }
-      }
-
-      if (!scanner.Consume('.') && !scanner.Consume(')')) {
-        scanner.Pop();
-        return null;
-      }
-
-      if (!scanner.Consume(' ')) {
-        scanner.Pop();
-        return null;
-      }
-
-      let offset = number.length + 2;
-      this.indent = this.whiteSpace(scanner);
-      if (this.indent < this.TAB_SIZE) {
-        offset += this.indent;
-      }
-
-      return new OrderedListItemToken(Number.parseInt(number), offset);
+    // Otherwise check this line is a new ordered list item or not.
+    let prefix = this.orderedListItemPreifx(scanner);
+    if (prefix == null) {
+      return null;
     }
 
-    scanner.Pop();
-    return null;
+    if (list == null || prefix.startNumber == '1' || prefix.delimitation != list.Delimitation()) {
+      // It is a new ordered list.
+      let list = new OrderedListToken(prefix.startNumber, prefix.delimitation);
+      this.appendToken(tokens, list);
+      let item = new ListItemToken(prefix.offset);
+      this.appendToken(list.Tokens(), item);
+      return item;
+    }
+
+    let item = new ListItemToken(prefix.offset);
+    this.appendToken(list.Tokens(), item);
+
+    return item;
   }
 
-  private unorderedListItem(scanner: Scanner) {
-    return null;
+  private unorderedList(tokens: Tokens, scanner: Scanner) {
+    let list = this.findLastTargetToken(TokenKind.UnorderedList, tokens) as UnorderedListToken;
+    if (list) {
+      let item = this.lastToken(list.Tokens())! as ListItemToken;
+
+      // Skip all blank lines.
+      while (this.blankline(item.Tokens(), scanner)) {
+        this.indent = this.whiteSpace(scanner);
+      }
+
+      // If the last token is a unordered list, we should check the indent is large and equal to offset.
+      if (this.indent >= item.Offset()) {
+        // This line is belong to this list, return the last list item.
+        if (this.lastToken(item.Tokens())?.Kind() == TokenKind.BlankLine) {
+          item.SetTight(false);
+        }
+
+        this.indent -= item.Offset();
+        return item;
+      }
+    }
+
+    // If there are only blank lines flowering the list item and we are now at the end of input.
+    // So we should return null.
+    if (scanner.End()) {
+      return null;
+    }
+
+    // Otherwise check this line is a new unordered list item or not.
+    let prefix = this.unorderedListItemPrefix(scanner);
+    if (prefix == null) {
+      return null;
+    }
+
+    if (list == null || prefix.bullet != list.Bullet()) {
+      // It is a new ordered list.
+      let list = new UnorderedListToken(prefix.bullet);
+      this.appendToken(tokens, list);
+      let item = new ListItemToken(prefix.offset);
+      this.appendToken(list.Tokens(), item);
+      return item;
+    }
+
+    let item = new ListItemToken(prefix.offset);
+    this.appendToken(list.Tokens(), item);
+
+    return item;
+  }
+
+  private isDigit(char: string) {
+    return "0123456789".includes(char);
+  }
+
+  private orderedListItemPreifx(scanner: Scanner): orderedListItemPreifx | null {
+    scanner.Push();
+
+    let skipZero = true;
+    let peek = scanner.Peek();
+    let startNumber = "";
+
+    while (this.isDigit(peek)) {
+      if (skipZero) {
+        if (peek == '0') {
+          peek = scanner.Next();
+          continue;
+        }
+
+        skipZero = false;
+      }
+
+      startNumber += peek;
+      if (startNumber.length > 9) {
+        scanner.Pop();
+        return null;
+      }
+
+      peek = scanner.Next();
+    }
+
+    if (skipZero) {
+      startNumber = "0";
+    }
+
+    let delimitation = peek;
+    if (delimitation != '.' && delimitation != ')') {
+      scanner.Pop();
+      return null;
+    }
+    scanner.Skip();
+
+    if (!scanner.Consume(' ')) {
+      scanner.Pop();
+      return null
+    }
+
+    let offset = startNumber.length + 2;
+    this.indent = this.whiteSpace(scanner);
+    if (this.indent < 3) {
+      offset += this.indent;
+    }
+
+    scanner.Clear();
+    return { startNumber, delimitation, offset };
+  }
+
+  private unorderedListItemPrefix(scanner: Scanner): unorderedListItemPrefix | null {
+    scanner.Push();
+
+    let bullet = scanner.Peek();
+    if (bullet != '-' && bullet != '+' && bullet != '*') {
+      scanner.Pop();
+      return null;
+    }
+    scanner.Skip();
+
+    if (!scanner.Consume(' ')) {
+      scanner.Pop();
+      return null
+    }
+
+    let offset = 2;
+    this.indent = this.whiteSpace(scanner);
+    if (this.indent < 3) {
+      offset += this.indent;
+    }
+
+    scanner.Clear();
+    return { bullet, offset };
   }
 
   private headingLevel(scanner: Scanner) {
@@ -480,16 +585,28 @@ export class Parser {
         this.inline(node, paragraph.Content().trimEnd());
       }
         break;
-      case TokenKind.List: {
-        // TODO:
+      case TokenKind.OrderedList: {
+        let orderedList = token as OrderedListToken;
+        node = new Node(NodeTag.Ol);
+        node.SetText(orderedList.StartNumber());
+        this.parseInlines(node, orderedList.Tokens());
       }
         break;
-      case TokenKind.OrderedListItem: {
+      case TokenKind.UnorderedList: {
         // TODO:
+        let unorderedList = token as UnorderedListToken;
+        node = new Node(NodeTag.Ul);
+        this.parseInlines(node, unorderedList.Tokens());
       }
-        return;
-      case TokenKind.UnorderedListItem: {
-
+        break;
+      case TokenKind.ListItem: {
+        let listItem = token as ListItemToken;
+        node = new Node(NodeTag.Li);
+        if (listItem.Tight()) {
+          this.inline(node, (listItem.Tokens()[0] as LeafBlock).Content().trimEnd());
+        } else {
+          this.parseInlines(node, listItem.Tokens());
+        }
       }
         break;
       default: {
@@ -540,7 +657,7 @@ export class Parser {
       }
 
       if (deeply && isContainerBlock(lastToken)) {
-        return this.findLastTargetToken(kind, lastToken.Tokens());
+        return this.findLastTargetToken(kind, lastToken.Tokens(), deeply);
       }
     }
 
@@ -621,9 +738,3 @@ export class Parser {
 
   private TAB_SIZE: number = 4;
 }
-
-
-let input = "1. abc"
-let parser = new Parser();
-let tokens = parser.Parse(input);
-console.dir(tokens, { depth: Infinity });

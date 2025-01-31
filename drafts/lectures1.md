@@ -1,7 +1,3 @@
----
-标题：【学习分享】我在造 markdown parser 轮子中遇到三个小问题。
-时间：2024-06-25
----
 # Lectures1
 
 ## 自我介绍和项目介绍
@@ -18,7 +14,7 @@
 
 ## 第三个问题
 
-（演示）而第三个问题是关于 Link reference definitions 的，这个元素比较特殊。它是用于定义一些应用内容的，该元素本身不会被渲染。只用当使用了该应用的标签的地方会被渲染。比较难受的是它的几个部分都是可以跨行。这导致除非看下一行，不然是真的无法确定这些行是 Link reference definitions。为了解决这个问题，我还是引入了按行解析的方式，并添加了一个完成的标签。这个标签来标记这个 Link reference definitions 是否完成。为什么要这么做？因为这个元素有一点好处就是，如果它不是完整的 Link reference definitions，则会直接退化成一个 paragraphs。所以在解析它的时候还需要使用 raw 来保存所有的字符，以备后续判断为不完整时，退化成 paragraphs。其实主要的痛点在于，当你创建了一个 Link reference definitions 对象的时候，就很难转成 paragraphs 的对象了。所以只能在解析行内元素时，来判断到底是不是一个合法 Link reference definitions。
+（演示）而第三个问题是关于 Link reference definitions 的，这个元素比较特殊。它是用于定义一些应用内容的，该元素本身不会被渲染。只用当使用了该应用的标签的地方会被渲染。比较难受的是它的几个部分都是可以跨行。这导致除非看下一行，不然是真的无法确定这些行是否是 Link reference definitions。所以为了解决这个问题，我也是参考了 cmark 中的先将 Link reference definitions 假装是 Paragraphs。然后在添加其他元素的时候，检查上一个的元素是不是 Paragraphs，并且检查他是不是 Link reference definitions，如果是则将这个 Paragraphs 移除，并添加一个 Link reference definitions。这样就能在完成的接收了一个 Link reference definitions 的情况下去检查是不是 Link reference definitions。如果不是则还是保留为 Paragraphs。
 
 ## 结束语
 

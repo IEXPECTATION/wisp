@@ -58,10 +58,17 @@ export class HTMLRender implements Render {
         return "<blockquote>" + EOL;
       case NodeTag.Paragraph:
         return "<p>";
-      case NodeTag.Ol:
-        return "<ol>";
+      case NodeTag.Ol: {
+        let startNumber = target.Text();
+        if (startNumber != "1") {
+          return `<ol start="${startNumber}">${EOL}`;
+        }
+        return "<ol>" + EOL;
+      }
       case NodeTag.Ul:
-        return "<ul>";
+        return "<ul>" + EOL;
+      case NodeTag.Li:
+        return "<li>"
       case NodeTag.Image:
         return "";
       case NodeTag.SoftBreak:
@@ -110,6 +117,8 @@ export class HTMLRender implements Render {
         return "</ol>" + EOL;
       case NodeTag.Ul:
         return "</ul>" + EOL;
+      case NodeTag.Li:
+        return "</li>" + EOL;
       case NodeTag.Image:
         return "";
       case NodeTag.SoftBreak:
