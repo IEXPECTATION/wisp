@@ -12,7 +12,7 @@ export class HTMLRender implements Render {
   }
 
   private visitor(target: Node) {
-    let text = this.entryNode(target);
+    let text = this.enterNode(target);
 
     for (let node of target.Children()) {
       text += this.visitor(node);
@@ -22,7 +22,7 @@ export class HTMLRender implements Render {
     return text;
   }
 
-  private entryNode(target: Node) {
+  private enterNode(target: Node) {
     switch (target.Tag) {
       case NodeTag.Document:
         return "";
