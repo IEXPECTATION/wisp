@@ -42,7 +42,7 @@ export class HTMLRender implements Render {
         return "<h6>";
       case NodeTag.Hr:
         return "<hr/>";
-      case NodeTag.Block:
+      case NodeTag.Bold:
         return "<strong>";
       case NodeTag.Italic:
         return "<em>";
@@ -97,7 +97,7 @@ export class HTMLRender implements Render {
         return "</h6>" + EOL;
       case NodeTag.Hr:
         return EOL;
-      case NodeTag.Block:
+      case NodeTag.Bold:
         return "</strong>" + EOL;
       case NodeTag.Italic:
         return "</em>" + EOL;

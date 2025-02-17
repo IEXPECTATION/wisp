@@ -8,7 +8,7 @@ export enum NodeTag {
   H5,
   H6,
   Hr,
-  Block,
+  Bold,
   Italic,
   BlockItalic,
   Code,

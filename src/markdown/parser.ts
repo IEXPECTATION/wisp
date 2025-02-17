@@ -1,8 +1,6 @@
 import { Scanner } from "./scanner";
 import { BlankLineToken, BlockQuoteToken, ContainerBlock, FencedCodeToen, HeadingToken, HrToken, IndentedCodeToken, ParagraphToken, Token, TokenKind, Tokens, LeafBlock, isContainerBlock, ListItemToken, orderedListItemPreifx, unorderedListItemPrefix, OrderedListToken, UnorderedListToken } from "./tokens";
 import { Node, NodeTag } from "./nodes";
-import { assert } from "console";
-import { HTMLRender } from "./renderer";
 
 export interface PasrerConfig {
   TAB_SIZE?: number;
@@ -88,7 +86,7 @@ export class Parser {
       }
     }
 
-    assert(false, "Unreach code.")
+    console.assert(false, "Unreach code.")
   }
 
 
@@ -618,9 +616,197 @@ export class Parser {
   }
 
   private inline(node: Node, content: string) {
-    let text = new Node(NodeTag.Text);
-    text.SetText(content);
-    node.SetChild(text);
+    let segment = "";
+    let element = null;
+    for (let position = 0; position < content.length; position += 1) {
+      element = this.codeSpan(content.substring(position));
+      if (element) {
+        if (segment != "") {
+          let text = new Node(NodeTag.Text);
+          text.SetText(segment);
+          node.SetChild(text);
+          segment = "";
+        }
+
+        let { codeSpan, length } = element;
+        node.SetChild(codeSpan);
+        position += length;
+      }
+
+      element = this.emphasis(content.substring(position));
+      if (element) {
+        if (segment != "") {
+          let text = new Node(NodeTag.Text);
+          text.SetText(segment);
+          node.SetChild(text);
+          segment = "";
+        }
+
+        let { emphasis, length } = element;
+        node.SetChild(emphasis);
+        position += length;
+      }
+
+      if (position < content.length) {
+        segment += content[position];
+      }
+    }
+
+    if (segment != "") {
+      let text = new Node(NodeTag.Text);
+      text.SetText(segment);
+      node.SetChild(text);
+    }
+  }
+
+  private codeSpan(content: string) {
+    if (content[0] != '`') {
+      return undefined;
+    }
+
+    let backticks = 1;
+    let position = 1;
+
+    if (content[position] == '`') {
+      backticks += 1;
+      position += 1;
+    }
+
+    let leadingSpace = 0;
+    while (position < content.length) {
+      if (content[position] == ' ') {
+        leadingSpace += 1;
+        position += 1;
+        continue;
+      }
+      break;
+    }
+
+    let code = "";
+    let accept = false;
+    let stop = 0;
+    while (position < content.length) {
+      while (content[position] == '`') {
+        stop += 1;
+        position += 1;
+      }
+
+      if (stop == backticks) {
+        accept = true;
+        break;
+      }
+
+      while (stop > 0) {
+        code += '`';
+        stop -= 1;
+      }
+
+      code += content[position];
+      position += 1;
+    }
+
+    if (!accept) {
+      return undefined;
+    }
+
+    let trailingSpace = 0;
+    while (position < content.length) {
+      if (content[position] == ' ') {
+        trailingSpace += 1;
+        position += 1;
+        continue;
+      }
+      break;
+    }
+
+    let text = " ".repeat(Math.max(0, leadingSpace - 1)) + code + " ".repeat(Math.max(0, trailingSpace - 1));
+    let codeSpan = new Node(NodeTag.CodeSpan);
+    codeSpan.SetText(text);
+
+    return {
+      codeSpan: codeSpan, length: position + 1
+    };
+  }
+
+  private emphasis(content: string) {
+    if (content[0] != '*' && content[0] == '_') {
+      return undefined;
+    }
+
+    let bullet = content[0];
+    let position = 1;
+    let begin = 1;
+    let end = 0;
+    let text = "";
+    let accept = false;
+    let root = null;
+
+    if (bullet == '*') {
+      while (position < content.length) {
+        if (content[position] == bullet) {
+          begin += 1;
+          position += 1;
+        } else {
+          break;
+        }
+      }
+
+      while (position < content.length) {
+        if (content[position] == bullet) {
+          accept = true;
+          break;
+        }
+
+        text += content[position];
+        position += 1;
+      }
+
+      if (!accept) {
+        return undefined;
+      }
+
+      while (position < content.length) {
+        if (content[position] == bullet) {
+          end += 1;
+          position += 1;
+        } else {
+          break;
+        }
+      }
+
+      text = '*'.repeat(Math.max(0, begin - end)) + text + '*'.repeat(Math.max(0, end - begin));
+      let length = Math.min(begin, end);
+
+      let parent = null;
+      let emphasis = null;
+      while (length > 0) {
+        if (length >= 2) {
+          emphasis = new Node(NodeTag.Bold);
+          length -= 2;
+        } else {
+          emphasis = new Node(NodeTag.Italic);
+          length -= 1;
+        }
+
+        if (parent == null) {
+          parent = emphasis;
+          root = parent;
+        } else {
+          parent.SetChild(emphasis);
+          parent = emphasis;
+        }
+      }
+
+      let t = new Node(NodeTag.Text);
+      t.SetText(text);
+      parent!.SetChild(t);
+    } else if (bullet == '_') {
+      root = new Node(NodeTag.Italic);
+    } else {
+      return undefined;
+    }
+
+    return { emphasis: root!, length: position + 1 };
   }
 
 
@@ -699,7 +885,7 @@ export class Parser {
   }
 
   private eol(scanner: Scanner) {
-    assert(!scanner.End());
+    console.assert(!scanner.End());
 
     let peek = scanner.Peek();
     if (peek == '\n') {
