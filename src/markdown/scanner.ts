@@ -1,66 +1,50 @@
-import { assert } from "console";
-
 export class Scanner {
-  constructor(input: string) {
-    this.input = input;
-  }
+	constructor(input: string) {
+		this.input = input;
+	}
 
-  Position() {
-    return this.position;
-  }
+	End(): boolean {
+		return this.position == this.input.length;
+	}
 
-  End() {
-    if (this.position < this.input.length) {
-      return false;
-    }
+	Read(): string | undefined {
+		if (this.position < this.input.length) {
+			let ch = this.input[this.position];
+			this.position += 1;
+			return ch;
+		}
+		return undefined;
+	}
 
-    return true;
-  }
+	ReadLine(): string {
+		let line = "";
+		let ch = undefined;
+		while ((ch = this.Read()) != undefined) {
+			line += ch;
 
-  Peek() {
-    assert(!this.End());
+			if (ch == '\n') {
+				break;
+			}
+		}
+		return line;
+	}
 
-    return this.input[this.position];
-  }
+	Peek(): string | undefined {
+		if (this.position < this.input.length) {
+			return this.input[this.position];
+		}
+		return undefined;
+	}
 
-  Skip() {
-    assert(!this.End());
+	Consume(ch: string): boolean {
+		if (ch == this.Peek()) {
+			this.position += 1;
+			return true;
+		}
+		return false;
+	}
 
-    this.position += 1;
-  }
-
-  Next() {
-    assert(!this.End());
-
-    this.position += 1;
-    return this.input[this.position];
-  }
-
-  Consume(char: string) {
-    let peek = this.Peek();
-    if (peek == char) {
-      this.position += 1;
-      return true;
-    }
-
-    return false;
-  }
-
-  Push() {
-    this.anchor.push(this.position);
-  }
-
-  Pop() {
-    assert(this.anchor.length > 0);
-
-    this.position = this.anchor.pop()!;
-  }
-
-  Clear() {
-    this.anchor = [];
-  }
-
-  private input: string;
-  private position: number = 0;
-  private anchor: number[] = [];
-}
+	private position: number = 0;
+	private positions: number[] = [];
+	private input: string;
+};

@@ -4,17 +4,17 @@ import { Parser } from "../parser";
 import { HTMLRender } from "../renderer";
 
 async function markdown(path: string) {
-  assert(path != "");
+	assert(path != "");
 
-  const content = await readFile(path, 'utf-8');
-  const parser = new Parser();
-  const renderer = new HTMLRender();
-  return renderer.Render(parser.Parse(content));
+	const content = await readFile(path, 'utf-8');
+	const parser = new Parser();
+	const renderer = new HTMLRender();
+	return renderer.Render(parser.Parse(content));
 }
 
 (() => {
-  markdown("/home/wuch/dev/wisp/drafts/lectures1.md")
-    .then((html: string) => {
-      console.log(html);
-    });
+	markdown("/home/wuch/dev/wisp/drafts/lectures1.md")
+		.then((html: string) => {
+			console.log(html);
+		});
 })();
