@@ -9,42 +9,22 @@ export class Scanner {
 
 	Read(): string | undefined {
 		if (this.position < this.input.length) {
-			let ch = this.input[this.position];
+			let c = this.input[this.position];
 			this.position += 1;
-			return ch;
+			return c;
 		}
 		return undefined;
 	}
 
-	ReadLine(): string {
-		let line = "";
-		let ch = undefined;
-		while ((ch = this.Read()) != undefined) {
-			line += ch;
-
-			if (ch == '\n') {
-				break;
-			}
-		}
-		return line;
+	static IsEol(c: string) {
+		return c == '\n' || c == '\r';
 	}
 
-	Peek(): string | undefined {
-		if (this.position < this.input.length) {
-			return this.input[this.position];
-		}
-		return undefined;
-	}
-
-	Consume(ch: string): boolean {
-		if (ch == this.Peek()) {
-			this.position += 1;
-			return true;
-		}
-		return false;
+	static IsWhiteSpace(c: string) {
+		return c == '\t' || c == ' ';
 	}
 
 	private position: number = 0;
-	private positions: number[] = [];
 	private input: string;
 };
+

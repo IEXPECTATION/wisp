@@ -1,4 +1,4 @@
-import { Parser } from "../../src/markdown/parser";
+import { Parser } from "../../src/markdown/parser.js";
 import { HTMLRender } from "../../src/markdown/renderer";
 
 function Heading_Testcase1() {

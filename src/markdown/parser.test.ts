@@ -1,97 +1,78 @@
-import { BlockKind, BlockTag, LeafBlock } from "./block";
+import { Block, BlockQuoteBlock, FencedCodeBlock, HeadingBlock, HrBlock, ParagraphBlock } from "./block";
 import { Parser } from "./parser";
+import { Scanner } from "./scanner";
 
-test("Parser::Parse", () => {
-	const heading = "# Heading";
-	let parser = new Parser(heading);
+it("Parser::Parse", () => {
+	let input = "   # Heading";
+	let parser = new Parser(new Scanner(input));
+	let document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof HeadingBlock).toEqual(true);
+	expect((document.Blocks[0] as HeadingBlock).Content).toEqual("Heading");
 
-	let blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.Heading);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("Heading");
+	input = "   #	Heading";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof HeadingBlock).toEqual(true);
+	expect((document.Blocks[0] as HeadingBlock).Content).toEqual("Heading");
 
-	const hr = "---";
-	parser = new Parser(hr);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.Hr);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("");
 
-	const hr1 = " - - - ";
-	parser = new Parser(hr1);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.Hr);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("");
+	input = "   # Heading\n - - -\n   # Heading";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(3);
+	expect(document.Blocks[0] instanceof HeadingBlock).toEqual(true);
+	expect((document.Blocks[0] as HeadingBlock).Content).toEqual("Heading");
+	expect(document.Blocks[1] instanceof HrBlock).toEqual(true);
+	expect((document.Blocks[1] as HrBlock).Content).toEqual("");
+	expect(document.Blocks[2] instanceof HeadingBlock).toEqual(true);
+	expect((document.Blocks[2] as HeadingBlock).Content).toEqual("Heading");
 
-	const hr2 = "***\n";
-	parser = new Parser(hr2);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.Hr);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("");
+	input = "   ~~~\n     abc\n~~~~";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof FencedCodeBlock).toEqual(true);
+	expect((document.Blocks[0] as HeadingBlock).Content).toEqual("  abc\n");
 
-	const hr3 = "___";
-	parser = new Parser(hr3);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.Hr);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("");
+	input = "this is a simple text";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof ParagraphBlock).toEqual(true);
+	expect((document.Blocks[0] as HeadingBlock).Content).toEqual("this is a simple text");
 
-	const blankLine = "   ";
-	parser = new Parser(blankLine);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.BlankLine);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("");
+	input = "\n";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
 
-	const blankLine1 = "   \n";
-	parser = new Parser(blankLine1);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.BlankLine);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe("");
+	input = "> # heading";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
+	expect((document.Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof HeadingBlock).toEqual(true);
+	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as HeadingBlock).Content).toEqual("heading");
 
-	const indentedCode = `	printf("Hello World!);
-	return 0;`;
-	parser = new Parser(indentedCode);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.IndentedCode);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe(`printf("Hello World!);
-return 0;`);
+	input = "> this is a paragraph\nthis is another paragraph";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
+	expect((document.Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof ParagraphBlock).toEqual(true);
+	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("this is a paragraph\nthis is another paragraph");
 
-	const indentedCode1 = `		printf("Hello World!);
-		return 0;`;
-	parser = new Parser(indentedCode1);
-	blocks = parser.Parse();
-	expect(blocks[0].Tag).toBe(BlockTag.IndentedCode);
-	expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	expect(blocks.length).toBe(1);
-	expect((blocks[0] as LeafBlock).Content).toBe(`	printf("Hello World!);
-	return 0;`);
+	// input = "> this is a paragraph\nthis is another paragraph\n\nHere is a paragraph too";
+	// parser = new Parser(new Scanner(input));
+	// document = parser.Parse();
+	// expect(document.Blocks.length).toEqual(2);
+	// expect(document.Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
+	// console.dir(document, { depth: Infinity });
 
-	// const fencedCode = "```\nprintf(\"Hello World!\");\n```";
-	// parser = new Parser(fencedCode);
-	// blocks = parser.Parse();
-	// expect(blocks[0].Tag).toBe(BlockTag.FencedCode);
-	// expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	// expect(blocks.length).toBe(1);
-	// expect((blocks[0] as LeafBlock).Content).toBe("printf(\"Hello World!\");");
-
-	// const fencedCode1 = "~~~\nprintf(\"Hello World!\");\n~~~";
-	// parser = new Parser(fencedCode);
-	// blocks = parser.Parse();
-	// expect(blocks[0].Tag).toBe(BlockTag.FencedCode);
-	// expect(blocks[0].Kind).toBe(BlockKind.LeafBlock);
-	// expect(blocks.length).toBe(1);
-	// expect((blocks[0] as LeafBlock).Content).toBe("printf(\"Hello World!\");");
+	input = ">		code block";
+	parser = new Parser(new Scanner(input));
+	document = parser.Parse();
+	console.dir(document, { depth: Infinity });
 })

@@ -1,64 +1,27 @@
-export enum BlockTag {
-	BlankLine,
-	Heading,
-	Hr,
-	BlockQuote,
-	IndentedCode,
-	FencedCode,
-	Reference,
-	Paragraph,
-	OrderedList,
-	UnorderedList,
-	ListItem,
-};
-
-export enum BlockKind {
-	LeafBlock,
-	ContainerBlock,
-};
 
 export class Block {
-	constructor(tag: BlockTag, kind: BlockKind) {
-		this.Tag = tag;
-		this.Kind = kind;
-	}
-
-	Kind: BlockKind;
-	Tag: BlockTag;
 	Offset: number = 0;
 };
 
+// Leaf Blocks
 export class LeafBlock extends Block {
-	constructor(tag: BlockTag, content: string = "") {
-		super(tag, BlockKind.LeafBlock);
+	constructor(content: string) {
+		super();
 		this.Content = content;
 	}
 
 	Content: string;
-}
-
-export class ContainerBlock extends Block {
-	constructor(tag: BlockTag) {
-		super(tag, BlockKind.ContainerBlock);
-		this.Children = [];
-	}
-
-	static AppendBlock(container: ContainerBlock, block: Block) {
-		container.Children.push(block);
-	}
-
-	Children: Block[];
-}
+};
 
 export class BlankLineBlock extends LeafBlock {
 	constructor() {
-		super(BlockTag.BlankLine, "");
+		super("");
 	}
-}
+};
 
 export class HeadingBlock extends LeafBlock {
 	constructor(level: number, content: string) {
-		super(BlockTag.Heading, content);
+		super(content);
 		this.Level = level;
 	}
 
@@ -67,54 +30,91 @@ export class HeadingBlock extends LeafBlock {
 
 export class HrBlock extends LeafBlock {
 	constructor() {
-		super(BlockTag.Hr);
+		super("");
 	}
 };
 
 export class IndentedCodeBlock extends LeafBlock {
 	constructor(content: string = "") {
-		super(BlockTag.IndentedCode, content);
+		super(content);
 	}
 };
 
 export class FencedCodeBlock extends LeafBlock {
-	constructor(count: number, bullet: string, content: string = "") {
-		super(BlockTag.FencedCode, content);
+	constructor(length: number, bullet: string, offset: number, language: string, content: string = "") {
+		super(content);
 		this.Bullet = bullet;
-		this.Count = count;
+		this.Length = length;
+		this.Offset = offset;
+		this.Language = language;
 	}
 
 	Closed: boolean = false;
 	Bullet: string;
-	Count: number;
+	Length: number;
+	Language: string;
 };
 
 export class ReferenceBlock extends LeafBlock {
 	constructor() {
-		super(BlockTag.Reference);
+		super("");
 	}
 };
 
 export class ParagraphBlock extends LeafBlock {
 	constructor(content: string = "") {
-		super(BlockTag.Paragraph, content);
+		super(content);
 	}
 };
 
-export class BlockQuoteBlock extends ContainerBlock {
+// Container Blocks
+export class ContainerBlock extends Block {
+	constructor(parent: ContainerBlock | null) {
+		super();
+		this.Parent = parent;
+	}
+
+	Parent: ContainerBlock | null;
+	Blocks: Block[] = [];
+};
+
+export class DocumentBlock extends ContainerBlock {
 	constructor() {
-		super(BlockTag.BlockQuote);
+		super(null);
 	}
 }
+
+export class BlockQuoteBlock extends ContainerBlock {
+	constructor(parent: ContainerBlock, nested: number) {
+		super(parent);
+		this.Nested = nested;
+	}
+
+	Nested: number;
+};
 
 export class OrderedListBlock extends ContainerBlock {
-	constructor() {
-		super(BlockTag.OrderedList);
+	constructor(parent: ContainerBlock, startNumber: number) {
+		super(parent);
+		this.StartNumber = startNumber;
 	}
-}
+
+	StartNumber: number;
+};
 
 export class UnorderedListBlock extends ContainerBlock {
-	constructor() {
-		super(BlockTag.UnorderedList);
+	constructor(parent: ContainerBlock, bullet: string) {
+		super(parent);
+		this.Bullet = bullet;
 	}
+
+	Bullet: string;
+};
+
+export class ListItemBlock extends ContainerBlock {
+	constructor(parent: ContainerBlock) {
+		super(parent);
+	}
+
+	Loose: boolean = false
 }

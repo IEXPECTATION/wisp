@@ -1,6 +1,6 @@
 import { assert } from "node:console";
 import { readFile } from "node:fs/promises";
-import { Parser } from "../parser";
+import { Parser } from "../parser.js";
 import { HTMLRender } from "../renderer";
 
 async function markdown(path: string) {
