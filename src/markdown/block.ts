@@ -74,6 +74,17 @@ export class ContainerBlock extends Block {
 		this.Parent = parent;
 	}
 
+	Last(): Block | undefined {
+		if (this.Blocks.length > 0) {
+			return this.Blocks[this.Blocks.length - 1];
+		}
+		return undefined;
+	}
+
+	Append(child: Block) {
+		this.Blocks.push(child);
+	}
+
 	Parent: ContainerBlock | null;
 	Blocks: Block[] = [];
 };
@@ -85,12 +96,9 @@ export class DocumentBlock extends ContainerBlock {
 }
 
 export class BlockQuoteBlock extends ContainerBlock {
-	constructor(parent: ContainerBlock, nested: number) {
+	constructor(parent: ContainerBlock) {
 		super(parent);
-		this.Nested = nested;
 	}
-
-	Nested: number;
 };
 
 export class OrderedListBlock extends ContainerBlock {
