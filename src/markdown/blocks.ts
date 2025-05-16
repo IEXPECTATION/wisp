@@ -124,5 +124,7 @@ export class ListItemBlock extends ContainerBlock {
 		super();
 	}
 
-	Loose: boolean = false
+	Loose() {
+
+	}
 }

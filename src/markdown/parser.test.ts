@@ -64,4 +64,11 @@ return 0;
 	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("a paragraph\n");
 	expect(document.Blocks[1] instanceof HeadingBlock).toEqual(true);
 	expect((document.Blocks[1] as HeadingBlock).Content).toEqual("heading");
+
+	document = Parser.ParseBlock("> > a paragraph\n");
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
+	expect((document.Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
+	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof ParagraphBlock).toEqual(true);
+	expect((((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("a paragraph\n");
 })

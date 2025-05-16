@@ -1,4 +1,4 @@
-import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, FencedCodeBlock, HeadingBlock, HrBlock, IndentedCodeBlock, ParagraphBlock } from "./blocks";
+import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, FencedCodeBlock, HeadingBlock, HrBlock, IndentedCodeBlock, ListItemBlock, OrderedListBlock, ParagraphBlock, UnorderedListBlock } from "./blocks";
 
 class Context {
 	constructor(input: string) {
@@ -13,7 +13,6 @@ class Context {
 		this.Row += 1;
 		this.Column = 0;
 		this.Buffer = "";
-		// this.Indent = 0;
 		console.assert(this.Indent == 0);
 
 		let eol = "";
@@ -68,6 +67,7 @@ class Context {
 	Indent: number = 0;
 	Column: number = 0;
 	Row: number = 0;
+	BlankLine: boolean = false;
 
 	private input: string;
 	private position: number = 0;
@@ -195,20 +195,65 @@ export class Parser {
 	}
 
 	private static parseUnorderedList(context: Context): boolean {
-		return false;
+		if (context.Indent >= Parser.TAB_SIZE) {
+			return false;
+		}
+
+		const c = context.Peek(context.Column);
+		if (c != '+' && c != '*' && c != '-') {
+			return false;
+		}
+		const block = context.Container.Last();
+		if (block && block instanceof UnorderedListBlock) {
+			context.Container = block;
+		} else {
+			let unorderListBlock = new UnorderedListBlock(c);
+			context.Container.Append(unorderListBlock);
+			context.Container = unorderListBlock;
+			unorderListBlock.Indent = context.Indent;
+		}
+		context.Column += 1;
+		context.Indent = 0;
+		return true;
 	}
 
 	private static parseOrderedList(context: Context): boolean {
+		if (context.Indent >= Parser.TAB_SIZE) {
+			return false;
+		}
+
+		// TODO: Recognize the list is 'OrderedList' or not.
+		// const block = context.Container.Last();
+		// if (block && block instanceof UnorderedListBlock) {
+		// 	context.Container = block;
+		// } else {
+		// 	let unorderListBlock = new UnorderedListBlock(c);
+		// 	context.Container.Append(unorderListBlock);
+		// 	context.Container = unorderListBlock;
+		// 	unorderListBlock.Indent = context.Indent;
+		// }
+		// context.Indent = 0;
+		// return true;
 		return false;
+	}
+
+	private static parseListItem(context: Context): boolean {
+		const block = context.Container.Last();
+		if(block instanceof UnorderedListBlock || block instanceof OrderedListBlock) {
+			return true;
+		}
+		context.Indent = 0;
+		return true;
 	}
 
 	private static parseLeafBlock(context: Context): void {
 		let isParagraph = false;
+		let isBlankLine = false;
 		this.parseIndent(context);
 		if (context.Indent >= Parser.TAB_SIZE) {
 			this.parseIndentedCodeBlock(context);
 		} else if (this.parseBlankLine(context)) {
-			// Do nothing
+			isBlankLine = true;
 		} else if (this.parseHeading(context)) {
 			// Do nothing
 		} else if (this.parseHr(context)) {
@@ -218,6 +263,10 @@ export class Parser {
 		} else {
 			this.parseParagraph(context);
 			isParagraph = true;
+		}
+
+		if (!BlankLineBlock && context.BlankLine) {
+			context.BlankLine = false;
 		}
 
 		if (!isParagraph && context.Paragragh != null) {
@@ -247,6 +296,7 @@ export class Parser {
 		context.Container.Append(bl);
 		bl.Indent = context.Indent;
 		context.Indent = 0;
+		context.BlankLine = true;
 		return true;
 	}
 
