@@ -63,7 +63,11 @@ class Context {
 export class Parser {
 	static TAB_SIZE: number = 4;
 
-	static Parse(input: string): ContainerBlock {
+	static ParseInline(root: ContainerBlock): void {
+		// TODO:
+	}
+
+	static ParseBlock(input: string): ContainerBlock {
 		const context = new Context(input);
 
 		while (!context.Done()) {
@@ -214,6 +218,7 @@ export class Parser {
 				matched = false;
 				break;
 			}
+			column += 1;
 		}
 
 		if (!matched) {
@@ -221,6 +226,7 @@ export class Parser {
 		}
 
 		const bl = new BlankLineBlock();
+		context.Container.Append(bl);
 		bl.Indent = context.Indent;
 		context.Indent = 0;
 		return true;
@@ -253,12 +259,20 @@ export class Parser {
 		let column = context.Column;
 		let count = 0;
 		let c = undefined;
+		let bullet = undefined;
 		while ((c = context.Peek(column)) != undefined) {
-			if (Context.IsWhiteSpace(c) && Context.IsEOL(c)) {
+			if (Context.IsWhiteSpace(c) || Context.IsEOL(c)) {
 				column += 1;
 			} else if (c == '-' || c == '_' || c == '*') {
-				count += 1;
-				column += 1;
+				if (bullet == undefined) {
+					bullet = c;
+				}
+				if (bullet == c) {
+					count += 1;
+					column += 1;
+				} else {
+					break;
+				}
 			} else {
 				break;
 			}
