@@ -1,140 +1,89 @@
-import { BlankLineBlock, ContainerBlock, HeadingBlock, LeafBlock, DocumentBlock, ListItemBlock, HrBlock, ParagraphBlock, FencedCodeBlock, Block, IndentedCodeBlock, BlockQuoteBlock } from "./block";
-import { Scanner } from "./scanner";
+import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, HeadingBlock, HrBlock, ParagraphBlock } from "./block";
 
 class Context {
+	constructor(input: string) {
+		this.input = input;
+	}
+
+	Done(): boolean {
+		return this.position == this.input.length;
+	}
+
+	ReadLine(): void {
+		this.Row += 1;
+		this.Column = 0;
+		this.Buffer = "";
+		// this.Indent = 0;
+		console.assert(this.Indent == 0);
+
+		let eol = "";
+		while (this.position < this.input.length) {
+			let c = this.input[this.position];
+			if (Context.IsEOL(c)) {
+				this.Buffer += c;
+				this.position += 1;
+				c = this.input[this.position];
+				if (eol != c && Context.IsEOL(c)) {
+					this.Buffer += c;
+				}
+				return;
+			}
+			this.position += 1;
+			this.Buffer += c;
+		}
+	}
+
+	Peek(position: number): string | undefined {
+		if (position < this.Buffer.length) {
+			return this.Buffer[position];
+		}
+		return undefined;
+	}
+
+	static IsEOL(c: string) {
+		return c == '\n' || c == '\r';
+	}
+
+	static IsWhiteSpace(c: string) {
+		return c == ' ' || c == '\t';
+	}
+
 	Buffer: string = "";
-	Document: ContainerBlock = new DocumentBlock();
-	Container: ContainerBlock = this.Document;
+	Root: ContainerBlock = new DocumentBlock();
+	Container: ContainerBlock = this.Root;
+	Paragragh: ParagraphBlock | null = null;
 	Indent: number = 0;
 	Column: number = 0;
 	Row: number = 0;
 
-	Peek(scanner: Scanner, position: number): string | undefined {
-		return undefined
-	}
+	private input: string;
+	private position: number = 0;
 }
 
+
 export class Parser {
-	constructor(scanner: Scanner) {
-		this.scanner = scanner;
-	}
+	static TAB_SIZE: number = 4;
 
+	static Parse(input: string): ContainerBlock {
+		const context = new Context(input);
 
-	_Parse(): ContainerBlock {
-		const context = new Context();
-		while (!this.scanner.End() || this.buffer != "") {
-
+		while (!context.Done()) {
+			context.ReadLine();
+			this.parseContainerBlock(context);
+			this.parseLeafBlock(context);
 		}
 
-		return context.Document;
+		return context.Root;
 	}
 
-	private _parseContainerBlokc(context: Context) {
-		// TODO:
-		// parseBlockQuote(context);
-		// parseUnorderedList(context);
-		// parseOrderedList(context);
-	}
-
-	private _parseLeafBlock(context: Context) {
-		// TODO:
-		// parseBlankLine(context);
-		// parseHeading(context);
-		// parseHr(context);
-		// parseIndentedCodeBlock(context);
-		// parseFencedCodeBlock(context);
-		// parseParagraph(context);
-	}
-
-
-
-	Parse(): ContainerBlock {
-		let indented = false;
-		while (!this.scanner.End() || this.buffer != "") {
-			this.parseIndent();
-			indented = this.checkIndent();
-
-			if (indented && this.parseIndentedCodeBlock()) {
-				continue;
-			}
-
-			if (this.parseBlankLine()) {
-				continue;
-			} else if (this.parseHeadingBlock()) {
-				continue;
-			} else if (this.parseHrBlock()) {
-				continue;
-			} else if (this.parseFencedCodeBlock()) {
-				continue;
-			} else if (this.parseBlockQuote()) {
-				continue;
-			}
-
-			this.parseParagraph();
-		}
-		return this.root;
-	}
-
-	private peek(position: number): string | undefined {
-		if (position >= this.buffer.length) {
-			let offset = position - this.buffer.length + 1;
-			while (offset > 0) {
-				let c = this.scanner.Read();
-				if (c == undefined) {
-					return undefined;
-				}
-				this.buffer += c;
-				offset -= 1;
-			}
-		}
-		return this.buffer[position];
-	}
-
-	private readLine(position: number, withEol: boolean = true): { position: number, buffer: string } {
-		let finished = false;
-
-		let eol = "";
-		let c = this.peek(position);
-		// Check the next character is eol.
-		let buffer = "";
-		while (!finished && c) {
-			if (Scanner.IsEol(c)) {
-				eol += c;
-				position += 1;
-				c = this.peek(position);
-				if (c && eol != c && Scanner.IsEol(c)) {
-					eol += c;
-					position += 1;
-				}
-				if (withEol) {
-					buffer += eol;
-				}
-				break;
-			}
-
-			buffer += c;
-			position += 1;
-			c = this.peek(position);
-		}
-
-		return { position, buffer };
-	}
-
-	private parseIndent(): void {
-		let position = 0;
-		let indent = 0;
+	private static parseIndent(context: Context): void {
+		let indent = context.Indent;
+		let column = context.Column;
 		let tabSize = Parser.TAB_SIZE;
 		let finished = false;
 
-		indent += this.remainingTabSize;
-		this.remainingTabSize = 0;
-
-		while (!finished) {
-			let c = this.peek(position);
-			if (c == undefined) {
-				break;
-			}
-
+		while (!finished && column < context.Buffer.length) {
+			let c = context.Buffer[column];
 			switch (c) {
 				case ' ': {
 					indent += 1;
@@ -153,89 +102,162 @@ export class Parser {
 					finished = true;
 					break;
 			}
-
 			if (!finished) {
-				position += 1;
+				column += 1;
 			}
 		}
 
-		this.indent = indent;
-		this.position = position;
+		context.Column = column;
+		context.Indent = indent;
 	}
 
-	private checkIndent(): boolean {
-		const lastBlock = this.getLastBlock();
+	private static parseContainerBlock(context: Context): void {
+		context.Container = context.Root;
+		this.parseIndent(context);
 
-		if (lastBlock && (lastBlock instanceof ParagraphBlock || lastBlock instanceof FencedCodeBlock && !lastBlock.Closed)) {
+		while (true) {
+			if (this.parseBlockQuote(context)) {
+				continue;
+			}
+
+			if (this.parseUnorderedList(context)) {
+				continue;
+			}
+
+			if (this.parseOrderedList(context)) {
+				continue;
+			}
+
+			break;
+		}
+	}
+
+	private static parseBlockQuote(context: Context): boolean {
+		if (context.Indent > this.TAB_SIZE) {
 			return false;
 		}
 
-		if (this.indent - this.current.Offset >= Parser.TAB_SIZE) {
-			return true;
+		let column = context.Column;
+		let firstBlockQuote = null;
+		let matched = false;
+		while (context.Peek(column) == '>') {
+			matched = true;
+			const block = context.Container.Last();
+			if (block instanceof BlockQuoteBlock) {
+				context.Container = block
+			} else {
+				let bq = new BlockQuoteBlock()
+				context.Container.Append(bq);
+				context.Container = bq;
+				if (firstBlockQuote == null) {
+					firstBlockQuote = bq;
+				}
+			}
+			column += 1;
 		}
-		return false;
-	}
 
-	private getLastBlock(): Block | undefined {
-		if (this.current.Blocks.length > 0) {
-			return this.current.Blocks[this.current.Blocks.length - 1];
-		}
-		return undefined;
-	}
-
-	private parseHeadingBlock(): boolean {
-		const { level, position } = this.headingPrefix();
-		if (level == 0) {
+		if (!matched) {
 			return false;
 		}
 
-		const { position: newPosition, buffer } = this.readLine(position, false);
-		const heading = new HeadingBlock(level, buffer);
-		this.appendLeafBlock(heading);
-		this.buffer = this.buffer.substring(newPosition);
+		let c = context.Peek(column);
+		if (c == ' ') {
+			column += 1;
+		} else if (c == '\t') {
+			context.Indent = Parser.TAB_SIZE - (column % Parser.TAB_SIZE);
+			column += 1;
+		} else {
+			// Do nothing
+		}
+
+		if (firstBlockQuote != null) {
+			firstBlockQuote.Indent = context.Indent;
+		}
+		context.Column = column;
+		context.Indent = 0;
 		return true;
 	}
 
-	private headingPrefix(): { level: number, position: number } {
-		let position = this.position;
-		let level = 0;
-		let c = this.peek(position);
+	private static parseUnorderedList(context: Context): boolean {
+		return false;
+	}
 
-		while (level <= 6 && c && c == '#') {
-			level += 1;
-			position += 1;
-			c = this.peek(position);
-		}
+	private static parseOrderedList(context: Context): boolean {
+		return false;
+	}
 
-		if (level == 0) {
-			return { level, position: 0 };
-		}
-
-		position += 1;
-		if (c && Scanner.IsWhiteSpace(c)) {
-			return { level, position };
-		} else {
-			return { level: 0, position: 0 };
+	private static parseLeafBlock(context: Context): void {
+		this.parseIndent(context);
+		if (context.Indent >= Parser.TAB_SIZE) {
+			this.parseIndentedCodeBlock(context);
+			return;
+		} else if (this.parseBlankLine(context)) {
+			return;
+		} else if (this.parseHeading(context)) {
+			return;
+		} else if (this.parseHr(context)) {
+			return;
 		}
 	}
 
-	private parseHrBlock(): boolean {
-		const { position, buffer } = this.readLine(this.position);
-		let count = 0;
-		let bullet = "";
-		for (let c of buffer) {
-			if (c == '-' || c == '_' || c == '*') {
-				if (bullet == "") {
-					bullet = c;
-				}
+	private static parseBlankLine(context: Context): boolean {
+		console.assert(context.Indent < Parser.TAB_SIZE);
 
-				if (bullet == c) {
-					count += 1;
-				}
-			} else if (c != ' ' && c != '\t') {
+		let column = context.Column;
+		let c = undefined;
+		let matched = true;
+		while ((c = context.Peek(column)) != undefined) {
+			if (!Context.IsWhiteSpace(c) && !Context.IsEOL(c)) {
+				matched = false;
 				break;
+			}
+		}
+
+		const bl = new BlankLineBlock();
+		bl.Indent = context.Indent;
+		context.Indent = 0;
+		return true;
+	}
+
+	private static parseHeading(context: Context): boolean {
+		console.assert(context.Indent < Parser.TAB_SIZE);
+
+		let column = context.Column;
+
+		let c = undefined;
+		let level = 0;
+		while (level < 6 && (c = context.Peek(column)) == '#') {
+			level += 1;
+			column += 1;
+		}
+
+		if (c && !Context.IsWhiteSpace(c)) {
+			return false;
+		}
+		column += 1;
+
+		const content = context.Buffer.substring(column).trimEnd();
+		const heading = new HeadingBlock(level, content);
+		context.Container.Append(heading);
+		heading.Indent = context.Indent;
+		context.Indent = 0;
+		return true;
+	}
+
+	private static parseHr(context: Context): boolean {
+		console.assert(context.Indent < Parser.TAB_SIZE);
+
+		let column = context.Column;
+		let count = 0;
+		let c = undefined;
+		while ((c = context.Peek(column)) != undefined) {
+			if (Context.IsWhiteSpace(c) && Context.IsEOL(c)) {
+				column += 1;
+			} else if (c == '-' || c == '_' || c == '*') {
+				count += 1;
+				column += 1;
 			} else {
-				console.assert(c == ' ' || c == '\t');
+				break;
 			}
 		}
 
@@ -243,211 +265,26 @@ export class Parser {
 			return false;
 		}
 
-		this.appendLeafBlock(new HrBlock());
-		this.buffer = this.buffer.substring(position);
+		const hr = new HrBlock();
+		context.Container.Append(hr);
+		hr.Indent = context.Indent;
+		context.Indent = 0;
 		return true;
 	}
 
-	private parseIndentedCodeBlock(): boolean {
-		let position = this.position;
-		let leadingSpace = 0;
-		if (this.indent > Parser.TAB_SIZE) {
-			leadingSpace = this.indent - Parser.TAB_SIZE;
-		}
-
-		const { position: newPosition, buffer } = this.readLine(position);
-		let code = ' '.repeat(leadingSpace) + buffer;
-		const lastBlock = this.getLastBlock();
-		if (lastBlock instanceof IndentedCodeBlock) {
-			lastBlock.Content += code;
-		} else {
-			let block = new IndentedCodeBlock(code);
-			this.appendLeafBlock(block);
-		}
-		this.buffer = this.buffer.substring(newPosition);
-		return true;
-	}
-
-	private parseFencedCodeBlock(): boolean {
-		const lastBlock = this.getLastBlock();
-		const { position, buffer } = this.readLine(this.position);
-
-		if (lastBlock && lastBlock instanceof FencedCodeBlock) {
-			const { length, bullet, language } = this.fencedCodePrefix(buffer, lastBlock.Bullet);
-			if (length >= lastBlock.Length) {
-				lastBlock.Closed = true;
-			} else {
-				if (lastBlock.Offset < this.indent) {
-					lastBlock.Content += ' '.repeat(this.indent - lastBlock.Offset);
-				}
-
-				lastBlock.Content += buffer;
-			}
-		} else {
-			const { length, bullet, language } = this.fencedCodePrefix(buffer);
-			if (length > 0) {
-				this.appendLeafBlock(new FencedCodeBlock(length, bullet, this.indent, language));
-			} else {
-				return false;
-			}
-		}
-
-		this.buffer = this.buffer.substring(position);
-		return true;
-	}
-
-	private fencedCodePrefix(buffer: string, bullet: string = ''): { length: number, bullet: string, language: string } {
-		let length = 0;
-
-		let i = 0;
-		for (; i < buffer.length; i++) {
-			if (buffer[i] == '`' || buffer[i] == '~') {
-				if (bullet == '') {
-					bullet = buffer[i];
-				}
-
-				if (bullet == buffer[i]) {
-					length += 1;
-				}
-			} else {
-				break;
-			}
-		}
-
-		if (length == 0) {
-			return { length, bullet: '', language: "" };
-		}
-
-		if (i == buffer.length) {
-			return { length, bullet, language: "" };
-		}
-
-		let language = buffer.substring(i).trim();
-		return { length, bullet, language };
-	}
-
-	private parseParagraph() {
-		const { position, buffer } = this.readLine(this.position);
-		this.appendLeafBlock(new ParagraphBlock(buffer));
-		this.buffer = this.buffer.substring(position);
-	}
-
-	private parseBlankLine(): boolean {
-		const { position, buffer } = this.readLine(this.position, false);
-
-		for (let c of buffer) {
-			if (!Scanner.IsWhiteSpace(c)) {
-				return false;
-			}
-		}
-
-		this.appendLeafBlock(new BlankLineBlock());
-		this.buffer = this.buffer.substring(position);
-		return true;
-	}
-
-	private parseBlockQuote(): boolean {
-		const { position, nested } = this.blockQuotePrefix();
-		if (nested == -1) {
-			return false;
-		}
-
-		if (this.current instanceof BlockQuoteBlock) {
-			let currentNested = this.current.Nested;
-			if (currentNested < nested) {
-				while (currentNested < nested) {
-					currentNested += 1;
-					const bq = new BlockQuoteBlock(this.current, currentNested);
-					this.current.Blocks.push(bq);
-					this.current = bq;
-				}
-			} else {
-				while (currentNested > nested) {
-					if (this.current.Parent) {
-						this.current = this.current.Parent;
-					}
-				}
-			}
-		} else {
-			for (let i = 0; i < nested; i++) {
-				let bq = new BlockQuoteBlock(this.current, i);
-				this.current.Blocks.push(bq);
-				this.current = bq;
-			}
-		}
-
-		this.buffer = this.buffer.substring(position);
-		return true;
-	}
-
-	private blockQuotePrefix(): { position: number, nested: number } {
-		let position = this.position;
-		let nested = 0;
-		let c = this.peek(position);
-		while (c == '>') {
-			nested += 1;
-			position += 1;
-			c = this.peek(position);
-		}
-
-		if (nested == 0) {
-			return { position: 0, nested: -1 };
-		}
-
-		if (c == ' ') {
-			position += 1;
-		}
-
-		if (c == '\t') {
-			this.remainingTabSize = Parser.TAB_SIZE - (position % Parser.TAB_SIZE) - 1;
-			position += 1;
-		}
-
-		return { position, nested };
-	}
-
-	private parseOrderList(): boolean {
-		let position = this.position;
-		let c = this.peek(position);
-		if (c == '-' || c == '+' || c == '*') {
-
-		}
-
-		return false;
-	}
-
-	private orderListPrefix(): void {
+	private static parseIndentedCodeBlock(context: Context): void {
 
 	}
 
-	private parseUnorderList(): boolean {
-		return false;
+	private static parseFencedCodeBlock(context: Context): void {
+
 	}
 
-	private appendLeafBlock(b: LeafBlock): void {
-		if (this.current instanceof BlockQuoteBlock) {
-			if (b instanceof ParagraphBlock) {
-				const lastBlock = this.getLastBlock();
-				if (lastBlock && lastBlock instanceof ParagraphBlock) {
-					lastBlock.Content += b.Content;
-					return;
-				}
-			}
-			this.current.Blocks.push(b);
-		} else if (this.current instanceof ListItemBlock) {
+	private static parseParagraph(context: Context): void {
 
-		} else {
-			this.current.Blocks.push(b);
-		}
 	}
 
-	private static TAB_SIZE = 4;
-
-	private root: ContainerBlock = new DocumentBlock();
-	private current: ContainerBlock = this.root;
-	private buffer: string = "";
-	private position: number = 0;
-	private indent: number = 0;
-	private remainingTabSize: number = 0;
-	private scanner: Scanner;
 };
+
+const document = Parser.Parse("> # heading\n>> ## heading\n> ### heading\n>>>    #### heading");
+console.dir(document, { depth: Infinity });

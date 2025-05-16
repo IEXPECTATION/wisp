@@ -1,6 +1,6 @@
 
 export class Block {
-	Offset: number = 0;
+	Indent: number = 0;
 };
 
 // Leaf Blocks
@@ -41,11 +41,10 @@ export class IndentedCodeBlock extends LeafBlock {
 };
 
 export class FencedCodeBlock extends LeafBlock {
-	constructor(length: number, bullet: string, offset: number, language: string, content: string = "") {
+	constructor(length: number, bullet: string, language: string, content: string = "") {
 		super(content);
 		this.Bullet = bullet;
 		this.Length = length;
-		this.Offset = offset;
 		this.Language = language;
 	}
 
@@ -62,16 +61,18 @@ export class ReferenceBlock extends LeafBlock {
 };
 
 export class ParagraphBlock extends LeafBlock {
-	constructor(content: string = "") {
+	constructor(parent: ContainerBlock, content: string = "") {
 		super(content);
+		this.Parent = parent;
 	}
+
+	Parent: ContainerBlock;
 };
 
 // Container Blocks
 export class ContainerBlock extends Block {
-	constructor(parent: ContainerBlock | null) {
+	constructor() {
 		super();
-		this.Parent = parent;
 	}
 
 	Last(): Block | undefined {
@@ -85,25 +86,24 @@ export class ContainerBlock extends Block {
 		this.Blocks.push(child);
 	}
 
-	Parent: ContainerBlock | null;
 	Blocks: Block[] = [];
 };
 
 export class DocumentBlock extends ContainerBlock {
 	constructor() {
-		super(null);
+		super();
 	}
 }
 
 export class BlockQuoteBlock extends ContainerBlock {
-	constructor(parent: ContainerBlock) {
-		super(parent);
+	constructor() {
+		super();
 	}
 };
 
 export class OrderedListBlock extends ContainerBlock {
-	constructor(parent: ContainerBlock, startNumber: number) {
-		super(parent);
+	constructor(startNumber: number) {
+		super();
 		this.StartNumber = startNumber;
 	}
 
@@ -111,8 +111,8 @@ export class OrderedListBlock extends ContainerBlock {
 };
 
 export class UnorderedListBlock extends ContainerBlock {
-	constructor(parent: ContainerBlock, bullet: string) {
-		super(parent);
+	constructor(bullet: string) {
+		super();
 		this.Bullet = bullet;
 	}
 
@@ -120,8 +120,8 @@ export class UnorderedListBlock extends ContainerBlock {
 };
 
 export class ListItemBlock extends ContainerBlock {
-	constructor(parent: ContainerBlock) {
-		super(parent);
+	constructor() {
+		super();
 	}
 
 	Loose: boolean = false
