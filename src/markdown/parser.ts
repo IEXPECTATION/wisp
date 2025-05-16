@@ -1,4 +1,4 @@
-import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, HeadingBlock, HrBlock, ParagraphBlock } from "./block";
+import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, HeadingBlock, HrBlock, ParagraphBlock } from "./blocks";
 
 class Context {
 	constructor(input: string) {
@@ -59,7 +59,6 @@ class Context {
 	private input: string;
 	private position: number = 0;
 }
-
 
 export class Parser {
 	static TAB_SIZE: number = 4;
@@ -213,6 +212,10 @@ export class Parser {
 			}
 		}
 
+		if (!matched) {
+			return false;
+		}
+
 		const bl = new BlankLineBlock();
 		bl.Indent = context.Indent;
 		context.Indent = 0;
@@ -283,8 +286,4 @@ export class Parser {
 	private static parseParagraph(context: Context): void {
 
 	}
-
 };
-
-const document = Parser.Parse("> # heading\n>> ## heading\n> ### heading\n>>>    #### heading");
-console.dir(document, { depth: Infinity });
