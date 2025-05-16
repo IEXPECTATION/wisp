@@ -40,6 +40,19 @@ class Context {
 		return undefined;
 	}
 
+	SkipWhiteSpace(column: number): number {
+		while (column < this.Buffer.length) {
+			let c = this.Peek(column);
+			if (c && !Context.IsWhiteSpace(c)) {
+				break;
+			}
+			column += 1;
+		}
+
+		this.Column = column;
+		return column;
+	}
+
 	static IsEOL(c: string) {
 		return c == '\n' || c == '\r';
 	}
@@ -190,20 +203,25 @@ export class Parser {
 	}
 
 	private static parseLeafBlock(context: Context): void {
+		let isParagraph = false;
 		this.parseIndent(context);
 		if (context.Indent >= Parser.TAB_SIZE) {
 			this.parseIndentedCodeBlock(context);
-			return;
 		} else if (this.parseBlankLine(context)) {
-			return;
+			// Do nothing
 		} else if (this.parseHeading(context)) {
-			return;
+			// Do nothing
 		} else if (this.parseHr(context)) {
-			return;
+			// Do nothing
 		} else if (this.parseFencedCodeBlock(context)) {
-			return;
+			// Do nothing
 		} else {
 			this.parseParagraph(context);
+			isParagraph = true;
+		}
+
+		if (!isParagraph && context.Paragragh != null) {
+			context.Paragragh = null;
 		}
 	}
 
@@ -302,15 +320,77 @@ export class Parser {
 
 	private static parseFencedCodeBlock(context: Context): boolean {
 		const block = context.Container.Last();
+		let length = 0;
+		let c = undefined;
+		let bullet = undefined;
+		let column = context.Column;
 		if (block && block instanceof FencedCodeBlock && !block.Closed) {
 			// TODO: Check that this line is a end of 'FencedCodeBlock'
+			let origin = column;
+			bullet = block.Bullet;
+			while ((c = context.Peek(column)) != undefined) {
+				if (c == '~' || c == '`') {
+					if (bullet == c) {
+						length += 1;
+					} else {
+						break;
+					}
+				} else {
+					break;
+				}
+				column += 1;
+			}
+
+			column = context.SkipWhiteSpace(column);
+			if (column == context.Buffer.length && length >= block.Length) {
+				block.Closed = true;
+			} else {
+				let leak = Math.max(0, context.Indent - block.Indent);
+				block.Content += ' '.repeat(leak) + context.Buffer.substring(origin);
+			}
+			context.Indent = 0;
+			return true;
 		}
 
-		// TODO: Check that this line is a start of 'FencedCodeBlock'
-		return false;
+		while ((c = context.Peek(column)) != undefined) {
+			if (c == '~' || c == '`') {
+				if (bullet == undefined) {
+					bullet = c;
+				}
+				if (bullet == c) {
+					length += 1;
+				} else {
+					break;
+				}
+			} else {
+				break;
+			}
+			column += 1;
+		}
+
+		if (bullet == undefined || length < 3) {
+			return false;
+		}
+
+		column = context.SkipWhiteSpace(column);
+		const language = context.Buffer.substring(column).trimEnd();
+
+		const fencedCodeBlock = new FencedCodeBlock(length, bullet, language);
+		context.Container.Append(fencedCodeBlock);
+		fencedCodeBlock.Indent = context.Indent;
+		context.Indent = 0;
+		return true;
 	}
 
 	private static parseParagraph(context: Context): void {
-
+		if (context.Paragragh != null) {
+			context.Paragragh.Content += context.Buffer.substring(context.Column);
+		} else {
+			const p = new ParagraphBlock(context.Container, context.Buffer.substring(context.Column));
+			p.Indent = context.Indent;
+			context.Container.Append(p);
+			context.Paragragh = p;
+		}
+		context.Indent = 0;
 	}
 };

@@ -55,8 +55,8 @@ export class FencedCodeBlock extends LeafBlock {
 };
 
 export class ReferenceBlock extends LeafBlock {
-	constructor() {
-		super("");
+	constructor(content: string = "") {
+		super(content);
 	}
 };
 
