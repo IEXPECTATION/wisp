@@ -1,4 +1,4 @@
-import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, HeadingBlock, HrBlock, ParagraphBlock } from "./blocks";
+import { BlankLineBlock, BlockQuoteBlock, ContainerBlock, DocumentBlock, FencedCodeBlock, HeadingBlock, HrBlock, IndentedCodeBlock, ParagraphBlock } from "./blocks";
 
 class Context {
 	constructor(input: string) {
@@ -196,6 +196,10 @@ export class Parser {
 			return;
 		} else if (this.parseHr(context)) {
 			return;
+		} else if (this.parseFencedCodeBlock(context)) {
+			return;
+		} else {
+			this.parseParagraph(context);
 		}
 	}
 
@@ -223,8 +227,6 @@ export class Parser {
 	}
 
 	private static parseHeading(context: Context): boolean {
-		console.assert(context.Indent < Parser.TAB_SIZE);
-
 		let column = context.Column;
 
 		let c = undefined;
@@ -248,8 +250,6 @@ export class Parser {
 	}
 
 	private static parseHr(context: Context): boolean {
-		console.assert(context.Indent < Parser.TAB_SIZE);
-
 		let column = context.Column;
 		let count = 0;
 		let c = undefined;
@@ -276,11 +276,24 @@ export class Parser {
 	}
 
 	private static parseIndentedCodeBlock(context: Context): void {
-
+		const leak = context.Indent - Parser.TAB_SIZE;
+		const block = context.Container.Last();
+		if (block && block instanceof IndentedCodeBlock) {
+			block.Content += ' '.repeat(leak) + context.Buffer.substring(context.Column);
+		} else {
+			context.Container.Append(new IndentedCodeBlock(' '.repeat(leak) + context.Buffer.substring(context.Column)));
+		}
+		context.Indent = 0;
 	}
 
-	private static parseFencedCodeBlock(context: Context): void {
+	private static parseFencedCodeBlock(context: Context): boolean {
+		const block = context.Container.Last();
+		if (block && block instanceof FencedCodeBlock && !block.Closed) {
+			// TODO: Check that this line is a end of 'FencedCodeBlock'
+		}
 
+		// TODO: Check that this line is a start of 'FencedCodeBlock'
+		return false;
 	}
 
 	private static parseParagraph(context: Context): void {
