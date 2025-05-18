@@ -1,6 +1,6 @@
 
 export class Block {
-	Indent: number = 0;
+	Indentation: number = 0;
 };
 
 // Leaf Blocks

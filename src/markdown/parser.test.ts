@@ -71,4 +71,17 @@ return 0;
 	expect((document.Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
 	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof ParagraphBlock).toEqual(true);
 	expect((((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("a paragraph\n");
+
+	document = Parser.ParseBlock("> a\n>> b\n");
+	expect(document.Blocks.length).toEqual(1);
+	expect(document.Blocks[0] instanceof BlockQuoteBlock).toEqual(true);
+	expect((document.Blocks[0] as BlockQuoteBlock).Blocks[0] instanceof ParagraphBlock).toEqual(true);
+	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("a\n");
+	expect((document.Blocks[0] as BlockQuoteBlock).Blocks[1] instanceof BlockQuoteBlock).toEqual(true);
+	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[1] as BlockQuoteBlock).Blocks[0] instanceof ParagraphBlock).toEqual(true);
+	expect((((document.Blocks[0] as BlockQuoteBlock).Blocks[1] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("b\n");
+
+	document = Parser.ParseBlock("* abc");
+	expect(document.Blocks.length).toEqual(1);
+
 })

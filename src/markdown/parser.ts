@@ -5,15 +5,21 @@ class Context {
 		this.input = input;
 	}
 
+	/*
+		Done returns true if it arrived the end of 'input'. Otherwise it return false.
+	*/
 	Done(): boolean {
 		return this.position == this.input.length;
 	}
 
+	/*
+		ReadLine reads the next line of 'input', and save it to the 'Buffer'.
+	*/
 	ReadLine(): void {
 		this.Row += 1;
 		this.Column = 0;
 		this.Buffer = "";
-		console.assert(this.Indent == 0);
+		console.assert(this.Indentation == 0);
 
 		let eol = "";
 		while (this.position < this.input.length) {
@@ -32,6 +38,9 @@ class Context {
 		}
 	}
 
+	/*
+		Peek returns the target character that is specified by its position in the 'Buffer'..
+	*/
 	Peek(position: number): string | undefined {
 		if (position < this.Buffer.length) {
 			return this.Buffer[position];
@@ -39,6 +48,9 @@ class Context {
 		return undefined;
 	}
 
+	/*
+		TODO:
+	*/
 	SkipWhiteSpace(column: number): number {
 		while (column < this.Buffer.length) {
 			let c = this.Peek(column);
@@ -64,10 +76,9 @@ class Context {
 	Root: ContainerBlock = new DocumentBlock();
 	Container: ContainerBlock = this.Root;
 	Paragragh: ParagraphBlock | null = null;
-	Indent: number = 0;
+	Indentation: number = 0;
 	Column: number = 0;
 	Row: number = 0;
-	BlankLine: boolean = false;
 
 	private input: string;
 	private position: number = 0;
@@ -92,8 +103,8 @@ export class Parser {
 		return context.Root;
 	}
 
-	private static parseIndent(context: Context): void {
-		let indent = context.Indent;
+	private static parseIndentation(context: Context): void {
+		let indent = context.Indentation;
 		let column = context.Column;
 		let tabSize = Parser.TAB_SIZE;
 		let finished = false;
@@ -124,23 +135,39 @@ export class Parser {
 		}
 
 		context.Column = column;
-		context.Indent = indent;
+		context.Indentation = indent;
 	}
 
 	private static parseContainerBlock(context: Context): void {
 		context.Container = context.Root;
-		this.parseIndent(context);
+		this.parseIndentation(context);
 
 		while (true) {
 			if (this.parseBlockQuote(context)) {
+				if (context.Paragragh != null) {
+					context.Paragragh = null;
+				}
 				continue;
 			}
 
 			if (this.parseUnorderedList(context)) {
+				if (context.Paragragh != null) {
+					context.Paragragh = null;
+				}
 				continue;
 			}
 
 			if (this.parseOrderedList(context)) {
+				if (context.Paragragh != null) {
+					context.Paragragh = null;
+				}
+				continue;
+			}
+
+			if (this.parseListItem(context)) {
+				if (context.Paragragh != null) {
+					context.Paragragh = null;
+				}
 				continue;
 			}
 
@@ -149,7 +176,7 @@ export class Parser {
 	}
 
 	private static parseBlockQuote(context: Context): boolean {
-		if (context.Indent > this.TAB_SIZE) {
+		if (context.Indentation > this.TAB_SIZE) {
 			return false;
 		}
 
@@ -162,11 +189,11 @@ export class Parser {
 			if (block instanceof BlockQuoteBlock) {
 				context.Container = block
 			} else {
-				let bq = new BlockQuoteBlock()
-				context.Container.Append(bq);
-				context.Container = bq;
+				let blockQuote = new BlockQuoteBlock()
+				context.Container.Append(blockQuote);
+				context.Container = blockQuote;
 				if (firstBlockQuote == null) {
-					firstBlockQuote = bq;
+					firstBlockQuote = blockQuote;
 				}
 			}
 			column += 1;
@@ -178,47 +205,76 @@ export class Parser {
 
 		let c = context.Peek(column);
 		if (c == ' ') {
+			context.Indentation = 0;
 			column += 1;
 		} else if (c == '\t') {
-			context.Indent = Parser.TAB_SIZE - (column % Parser.TAB_SIZE);
+			context.Indentation = Parser.TAB_SIZE - (column % Parser.TAB_SIZE);
 			column += 1;
 		} else {
 			// Do nothing
 		}
 
 		if (firstBlockQuote != null) {
-			firstBlockQuote.Indent = context.Indent;
+			firstBlockQuote.Indentation = context.Indentation;
 		}
 		context.Column = column;
-		context.Indent = 0;
 		return true;
 	}
 
+	/*
+		parseUnorderedList checks taht the first character of the current line is either '+', '*', or '-'.
+		And if the indentation of this current line is greater than or equal to the that of last 'ListItemBlock',
+		it is a nested list.
+	*/
 	private static parseUnorderedList(context: Context): boolean {
-		if (context.Indent >= Parser.TAB_SIZE) {
+		if (context.Indentation >= Parser.TAB_SIZE) {
 			return false;
 		}
 
-		const c = context.Peek(context.Column);
-		if (c != '+' && c != '*' && c != '-') {
+		// TODO: We should avoid parsing 'Hr' as an 'UnorderedList' here.
+		// 			 However, the current implementation is inelegant.
+		//			 Perhaps we should adopt a more robust approach.
+		if (this.assumeHr(context)) {
 			return false;
 		}
+
+		let column = context.Column
+		const bullet = context.Peek(column);
+		if (bullet != '+' && bullet != '*' && bullet != '-') {
+			return false;
+		}
+		column += 1;
+
+		let c = context.Peek(column);
+		if (c == ' ') {
+			context.Indentation = 0;
+			column += 1;
+		} else if (c == '\t') {
+			context.Indentation = Parser.TAB_SIZE - (column % Parser.TAB_SIZE);
+			column += 1;
+		} else {
+			return false;
+		}
+
 		const block = context.Container.Last();
 		if (block && block instanceof UnorderedListBlock) {
-			context.Container = block;
-		} else {
-			let unorderListBlock = new UnorderedListBlock(c);
-			context.Container.Append(unorderListBlock);
-			context.Container = unorderListBlock;
-			unorderListBlock.Indent = context.Indent;
+			const listItem = block.Last();
+			if (listItem && listItem.Indentation <= context.Indentation) {
+				context.Container = block;
+			}
 		}
-		context.Column += 1;
-		context.Indent = 0;
+
+		let unorderList = new UnorderedListBlock(bullet);
+		unorderList.Indentation = context.Indentation;
+		context.Container.Append(unorderList);
+		context.Container = unorderList;
+		context.Column = column;
+		context.Indentation = 0;
 		return true;
 	}
 
 	private static parseOrderedList(context: Context): boolean {
-		if (context.Indent >= Parser.TAB_SIZE) {
+		if (context.Indentation >= Parser.TAB_SIZE) {
 			return false;
 		}
 
@@ -237,23 +293,40 @@ export class Parser {
 		return false;
 	}
 
+	/*
+		parseListItem parses that the current line is 'ListItemBlock' or not.
+		There are two scenarios:
+		1. If the current container of context is 'UnorderedListBlock' or 'OrderedListBlock',
+			 it creates a new 'ListItemBlock' and appends to the container of context.
+		2. If the current container of context is not 'UnorderedListBlock' or 'OrderedListBlock',
+			 it checks the last 'ContainerBlock' of container in context, if container is 'UnorderedListBlock'
+			 or 'OrderedListBlock', it checks the indentation of the current line. If the indentation is greater
+			 than or equal to the indentation of last 'ListItemBLock', the container of context will be set to
+			 last 'ListItemBlock'.
+	*/
 	private static parseListItem(context: Context): boolean {
-		const block = context.Container.Last();
-		if(block instanceof UnorderedListBlock || block instanceof OrderedListBlock) {
+		if (context.Container instanceof UnorderedListBlock || context.Container instanceof OrderedListBlock) {
+			let itemList = new ListItemBlock();
+			itemList.Indentation = context.Indentation;
+			context.Container.Append(itemList);
+			context.Container = itemList;
 			return true;
+		} else {
+			let block = context.Container.Last();
+			if (block instanceof UnorderedListBlock || block instanceof OrderedListBlock) {
+
+			}
 		}
-		context.Indent = 0;
-		return true;
+		return false;
 	}
 
 	private static parseLeafBlock(context: Context): void {
 		let isParagraph = false;
-		let isBlankLine = false;
-		this.parseIndent(context);
-		if (context.Indent >= Parser.TAB_SIZE) {
+		this.parseIndentation(context);
+		if (context.Indentation >= Parser.TAB_SIZE) {
 			this.parseIndentedCodeBlock(context);
 		} else if (this.parseBlankLine(context)) {
-			isBlankLine = true;
+			// Do nothing
 		} else if (this.parseHeading(context)) {
 			// Do nothing
 		} else if (this.parseHr(context)) {
@@ -265,17 +338,13 @@ export class Parser {
 			isParagraph = true;
 		}
 
-		if (!BlankLineBlock && context.BlankLine) {
-			context.BlankLine = false;
-		}
-
 		if (!isParagraph && context.Paragragh != null) {
 			context.Paragragh = null;
 		}
 	}
 
 	private static parseBlankLine(context: Context): boolean {
-		console.assert(context.Indent < Parser.TAB_SIZE);
+		console.assert(context.Indentation < Parser.TAB_SIZE);
 
 		let column = context.Column;
 		let c = undefined;
@@ -292,11 +361,10 @@ export class Parser {
 			return false;
 		}
 
-		const bl = new BlankLineBlock();
-		context.Container.Append(bl);
-		bl.Indent = context.Indent;
-		context.Indent = 0;
-		context.BlankLine = true;
+		const blanLine = new BlankLineBlock();
+		context.Container.Append(blanLine);
+		blanLine.Indentation = context.Indentation;
+		context.Indentation = 0;
 		return true;
 	}
 
@@ -318,16 +386,17 @@ export class Parser {
 		const content = context.Buffer.substring(column).trimEnd();
 		const heading = new HeadingBlock(level, content);
 		context.Container.Append(heading);
-		heading.Indent = context.Indent;
-		context.Indent = 0;
+		heading.Indentation = context.Indentation;
+		context.Indentation = 0;
 		return true;
 	}
 
-	private static parseHr(context: Context): boolean {
+	private static assumeHr(context: Context): boolean {
 		let column = context.Column;
 		let count = 0;
 		let c = undefined;
 		let bullet = undefined;
+
 		while ((c = context.Peek(column)) != undefined) {
 			if (Context.IsWhiteSpace(c) || Context.IsEOL(c)) {
 				column += 1;
@@ -349,23 +418,31 @@ export class Parser {
 		if (count < 3) {
 			return false;
 		}
+		return true;
+	}
+
+	private static parseHr(context: Context): boolean {
+		const is = this.assumeHr(context);
+		if (!is) {
+			return false;
+		}
 
 		const hr = new HrBlock();
 		context.Container.Append(hr);
-		hr.Indent = context.Indent;
-		context.Indent = 0;
+		hr.Indentation = context.Indentation;
+		context.Indentation = 0;
 		return true;
 	}
 
 	private static parseIndentedCodeBlock(context: Context): void {
-		const leak = context.Indent - Parser.TAB_SIZE;
+		const leak = context.Indentation - Parser.TAB_SIZE;
 		const block = context.Container.Last();
 		if (block && block instanceof IndentedCodeBlock) {
 			block.Content += ' '.repeat(leak) + context.Buffer.substring(context.Column);
 		} else {
 			context.Container.Append(new IndentedCodeBlock(' '.repeat(leak) + context.Buffer.substring(context.Column)));
 		}
-		context.Indent = 0;
+		context.Indentation = 0;
 	}
 
 	private static parseFencedCodeBlock(context: Context): boolean {
@@ -395,10 +472,10 @@ export class Parser {
 			if (column == context.Buffer.length && length >= block.Length) {
 				block.Closed = true;
 			} else {
-				let leak = Math.max(0, context.Indent - block.Indent);
+				let leak = Math.max(0, context.Indentation - block.Indentation);
 				block.Content += ' '.repeat(leak) + context.Buffer.substring(origin);
 			}
-			context.Indent = 0;
+			context.Indentation = 0;
 			return true;
 		}
 
@@ -425,10 +502,10 @@ export class Parser {
 		column = context.SkipWhiteSpace(column);
 		const language = context.Buffer.substring(column).trimEnd();
 
-		const fencedCodeBlock = new FencedCodeBlock(length, bullet, language);
-		context.Container.Append(fencedCodeBlock);
-		fencedCodeBlock.Indent = context.Indent;
-		context.Indent = 0;
+		const fencedCode = new FencedCodeBlock(length, bullet, language);
+		context.Container.Append(fencedCode);
+		fencedCode.Indentation = context.Indentation;
+		context.Indentation = 0;
 		return true;
 	}
 
@@ -437,10 +514,10 @@ export class Parser {
 			context.Paragragh.Content += context.Buffer.substring(context.Column);
 		} else {
 			const p = new ParagraphBlock(context.Container, context.Buffer.substring(context.Column));
-			p.Indent = context.Indent;
+			p.Indentation = context.Indentation;
 			context.Container.Append(p);
 			context.Paragragh = p;
 		}
-		context.Indent = 0;
+		context.Indentation = 0;
 	}
 };
