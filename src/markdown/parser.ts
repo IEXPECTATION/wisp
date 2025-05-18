@@ -87,6 +87,11 @@ class Context {
 export class Parser {
 	static TAB_SIZE: number = 4;
 
+	static Parse(input: string) {
+		const root = Parser.ParseBlock(input);
+		return this.ParseInline(root);
+	}
+
 	static ParseInline(root: ContainerBlock): void {
 		// TODO:
 	}
@@ -279,17 +284,6 @@ export class Parser {
 		}
 
 		// TODO: Recognize the list is 'OrderedList' or not.
-		// const block = context.Container.Last();
-		// if (block && block instanceof UnorderedListBlock) {
-		// 	context.Container = block;
-		// } else {
-		// 	let unorderListBlock = new UnorderedListBlock(c);
-		// 	context.Container.Append(unorderListBlock);
-		// 	context.Container = unorderListBlock;
-		// 	unorderListBlock.Indent = context.Indent;
-		// }
-		// context.Indent = 0;
-		// return true;
 		return false;
 	}
 
@@ -307,17 +301,29 @@ export class Parser {
 	private static parseListItem(context: Context): boolean {
 		if (context.Container instanceof UnorderedListBlock || context.Container instanceof OrderedListBlock) {
 			let itemList = new ListItemBlock();
-			itemList.Indentation = context.Indentation;
+			itemList.Indentation = context.Column;
 			context.Container.Append(itemList);
 			context.Container = itemList;
 			return true;
 		} else {
 			let block = context.Container.Last();
-			if (block instanceof UnorderedListBlock || block instanceof OrderedListBlock) {
-
+			if (!(block instanceof UnorderedListBlock) && !(block instanceof OrderedListBlock)) {
+				return false;
 			}
+
+			block = block.Last();
+			if (!(block instanceof ListItemBlock)) {
+				return false;
+			}
+
+			if (context.Indentation < block.Indentation) {
+				return false;
+			}
+
+			context.Indentation -= block.Indentation;
+			context.Container = block;
+			return true;
 		}
-		return false;
 	}
 
 	private static parseLeafBlock(context: Context): void {

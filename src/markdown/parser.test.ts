@@ -81,7 +81,8 @@ return 0;
 	expect(((document.Blocks[0] as BlockQuoteBlock).Blocks[1] as BlockQuoteBlock).Blocks[0] instanceof ParagraphBlock).toEqual(true);
 	expect((((document.Blocks[0] as BlockQuoteBlock).Blocks[1] as BlockQuoteBlock).Blocks[0] as ParagraphBlock).Content).toEqual("b\n");
 
-	document = Parser.ParseBlock("* abc");
+	document = Parser.ParseBlock("* abc\n       # heaidng");
+	console.dir(document, { depth: Infinity });
 	expect(document.Blocks.length).toEqual(1);
 
 })
