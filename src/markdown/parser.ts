@@ -1,4 +1,4 @@
-import { Block, BLOCKTAG, Document } from "./block";
+import { Node, NODETAG } from "./node";
 
 export class Parser {
   constructor(private readonly scanner: Scanner) { }
@@ -9,27 +9,25 @@ export class Parser {
 
   match_opened_blocks(): void {
     let matched = this.root;
-    while (matched.has_child()) {
-      if (!matched.last_child_opened()) {
+    while (matched.has_children()) {
+      if(!matched.is_last_element_opened()) {
         break;
       }
-
-
-      const child = matched.last_child();
-      if (child) {
-        matched = child
-      } else {
-        break;
+      
+      const child = matched.get_last_node()!;
+      let ok = child.process!.match(child.element!, this.scanner);
+      if(!ok) {
+        break; 
       }
+      matched = child;
     }
 
-    // If we could not match any opened blocks and the pending is empty, we should set current to root.
-    if (matched == this.root && this.pending == "") {
-      this.current = this.root;
+    if(matched != this.root && this.pending == "") {
+      this.current = matched;
     }
   }
 
   private pending: string = "";
-  private root: Block = new Document();
-  private current: Block = this.root;
+  private root: Node = new Node(NODETAG.Document);
+  private current: Node = this.root;
 }
