@@ -1,10 +1,15 @@
 import { Node, NODETAG } from "./node";
+import { Scanner } from "./scanner";
 
 export class Parser {
   constructor(private readonly scanner: Scanner) { }
 
-  open_new_blocks(): void {
+  parse(): void {
 
+  }
+
+  open_new_blocks(): void {
+     
   }
 
   match_opened_blocks(): void {
@@ -30,4 +35,6 @@ export class Parser {
   private pending: string = "";
   private root: Node = new Node(NODETAG.Document);
   private current: Node = this.root;
+  private row: number = 0;
+  private column: number = 0;
 }

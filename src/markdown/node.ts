@@ -1,5 +1,5 @@
 import { Block  } from "./block";
-import { Processer } from "./processer";
+import { Processor } from "./processor";
 
 export const NODETAG = {
   Document: 0,
@@ -36,7 +36,7 @@ export const NODETAG = {
 export type NodeTag = typeof NODETAG[keyof typeof NODETAG];
 
 export class Node {
-  constructor(public readonly tag: NodeTag, public readonly element?: Block, public readonly process?: Processer) { }
+  constructor(public readonly tag: NodeTag, public readonly element?: Block, public readonly process?: Processor) { }
 
   has_block(): boolean {
     return this.tag > NODETAG.BlockStart && this.tag < NODETAG.BlockEnd;

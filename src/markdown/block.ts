@@ -42,7 +42,7 @@ export class BlockQuote extends BaseBlock {
 }
 
 export class Heading extends BaseBlock {
-  constructor() {
+  constructor(public readonly level: number, public readonly content: string) {
     super()
   }
 }
@@ -59,12 +59,11 @@ export class FencedCode extends BaseBlock {
   }
 }
 
-export class HtmlBlocks extends BaseBlock {
+export class HtmlBlock extends BaseBlock {
   constructor() {
     super()
   }
 }
-
 
 export class LinkReferenceDefinition extends BaseBlock {
   constructor() {
