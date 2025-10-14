@@ -4,7 +4,7 @@ export class Scanner {
   constructor(input: string) {
     this.input = input;
     const err = this.readline();
-    if(err != null) {
+    if (err != null) {
       throw err;
     }
   }
@@ -14,7 +14,7 @@ export class Scanner {
   }
 
   advance(n: number = 1): void {
-    if (this.column + n < 0 || this.column + n < this.line_buffer.length) {
+    if (this.column + n < 0 || this.column + n == this.line_buffer.length) {
       return;
     }
     this.column += n;
@@ -39,6 +39,7 @@ export class Scanner {
       } else if (c == '\n') {
         break;
       } else { }
+      this.position += 1;
     }
 
     this.column = 0;
