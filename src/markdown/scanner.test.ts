@@ -6,7 +6,7 @@ test("Common Test", () => {
   const peek_line = scanner.peekline();
   expect(peek_line).toEqual(input);
 
-  scanner.advance();
+  scanner.consume();
   const peek_line2 = scanner.peekline();
   expect(peek_line2).toEqual(input.substring(1));
 })

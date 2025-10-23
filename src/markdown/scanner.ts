@@ -9,14 +9,51 @@ export class Scanner {
     }
   }
 
+  get_row(): number {
+    return this.row;
+  }
+
+  get_column(): number {
+    return this.column;
+  }
+
+  get_position(): number {
+    return this.position;
+  }
+
+  has_skiped_lines(): boolean {
+    return this.skiped_lines_begin != this.skiped_lines_end;
+  }
+
+  skip_line(): void {
+    if (!this.has_skiped_lines()) {
+      this.skiped_lines_begin = this.position - (this.line_buffer.length - this.column);
+    }
+    this.skiped_lines_end = this.position;
+  }
+
+  get_skiped_lines(): string {
+    return this.input.substring(this.skiped_lines_begin, this.skiped_lines_end);
+  }
+
+  clear_skiped_lines(): void {
+    this.skiped_lines_begin = this.skiped_lines_end = 0;
+  }
+
   peekline(): string {
     return this.line_buffer.substring(this.column);
   }
 
-  advance(n: number = 1): void {
-    if (this.column + n < 0 || this.column + n == this.line_buffer.length) {
+  consume(n: number = 1): void {
+    if (this.column + n < 0) {
       return;
     }
+
+    if (this.column + n >= this.line_buffer.length) {
+      this.column = this.line_buffer.length;
+      return;
+    }
+
     this.column += n;
   }
 
@@ -30,6 +67,7 @@ export class Scanner {
 
     while (this.position < this.input.length) {
       const c = this.input[this.position];
+      this.position += 1;
       s += c;
       if (c == '\r') {
         if (is_return) {
@@ -39,7 +77,6 @@ export class Scanner {
       } else if (c == '\n') {
         break;
       } else { }
-      this.position += 1;
     }
 
     this.column = 0;
@@ -50,7 +87,10 @@ export class Scanner {
 
   private row: number = 0;
   private column: number = 0;
+  private skiped_lines_begin: number = 0;
+  private skiped_lines_end: number = 0;
   private line_buffer: string = "";
+  private begin: number = 0;
   private position: number = 0;
   private input: string;
 }

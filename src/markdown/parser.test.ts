@@ -1,15 +1,11 @@
-export type Block = ContainerBlock | LeafBlock;
+import { Parser } from "./parser"
+import { Scanner } from "./scanner";
 
+let input = ">> abc\n>>> def\nghi\n# abc";
+let scanner = new Scanner(input);
+const p = new Parser(scanner);
+p.parse();
+console.dir(p.root, { depth: Infinity });
 
-class ContainerBlock {
-  constructor(public readonly children: Block[] = []) {
-
-  }
-}
-
-class LeafBlock {
-  constructor(public readonly content: string) {
-
-  }
-}
-
+// test("common test", () => {
+// })
