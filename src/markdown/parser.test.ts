@@ -1,7 +1,7 @@
 import { Parser } from "./parser"
 import { Scanner } from "./scanner";
 
-let input = ">> abc\n>>> def\nghi\n# abc";
+let input = "> abc\n>\n> def";
 let scanner = new Scanner(input);
 const p = new Parser(scanner);
 p.parse();

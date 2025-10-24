@@ -17,12 +17,6 @@ class BaseBlock implements Block {
   private opened: boolean = true;
 }
 
-export class Document extends BaseBlock {
-  constructor() {
-    super();
-  }
-}
-
 export class List extends BaseBlock {
   constructor(public readonly bullet: string) {
     super();
