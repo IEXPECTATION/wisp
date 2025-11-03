@@ -1,10 +1,12 @@
-import { Block, BlockQuote, Heading, Paragraph } from "./block";
-import {  Node, NODETAG } from "./node";
+import { Block, BlockQuote, FencedCode, Heading, IndentedCode, Paragraph } from "./block";
+import { Node, NODETAG } from "./node";
 import { ArriveEndOfInput, Scanner } from "./scanner";
 
 export interface Processor {
   open(scanner: Scanner): Node | null;
   match(block: Block, scanner: Scanner): boolean;
+  can_interrupt_paragraph(): boolean;
+  can_accept_indented_line(): boolean;
 }
 
 export class ListProcessor implements Processor {
@@ -13,6 +15,14 @@ export class ListProcessor implements Processor {
   }
   match(block: Block, scanner: Scanner): boolean {
     throw new Error("Method not implemented.");
+  }
+
+  can_interrupt_paragraph(): boolean {
+    return true;
+  }
+
+  can_accept_indented_line(): boolean {
+    return false;
   }
 }
 
@@ -24,12 +34,20 @@ export class ListItemProcessor implements Processor {
   match(block: Block, scanner: Scanner): boolean {
     throw new Error("Method not implemented.");
   }
+
+  can_interrupt_paragraph(): boolean {
+    return true;
+  }
+
+  can_accept_indented_line(): boolean {
+    return false;
+  }
 }
 
 export class BlockQuoteProcessor implements Processor {
   open(scanner: Scanner): Node | null {
     const ok = this.parse(scanner);
-    if(!ok) {
+    if (!ok) {
       return null;
     }
 
@@ -41,14 +59,22 @@ export class BlockQuoteProcessor implements Processor {
     return this.parse(scanner);
   }
 
+  can_interrupt_paragraph(): boolean {
+    return true;
+  }
+
+  can_accept_indented_line(): boolean {
+    return false;
+  }
+
   private parse(scanner: Scanner): boolean {
     const line = scanner.peekline();
-    if(line[0] != '>') {
+    if (line[0] != '>') {
       return false;
-    } 
+    }
     scanner.consume();
-    
-    if(line[1] == ' ') {
+
+    if (line[1] == ' ') {
       scanner.consume();
     }
     return true;
@@ -56,62 +82,147 @@ export class BlockQuoteProcessor implements Processor {
 }
 
 export class HeadingProcessor implements Processor {
-    open(scanner: Scanner): Node | null {
-        const line = scanner.peekline();
-        let i = 0;
-        let level = 0;
+  open(scanner: Scanner): Node | null {
+    const line = scanner.peekline();
+    let i = 0;
+    let level = 0;
 
-        while (i < line.length) {
-            if (level > 6) {
-                return null;
-            }
+    while (i < line.length) {
+      if (level > 6) {
+        return null;
+      }
 
-            if (line[i] == '#') {
-                level += 1;
-            } else {
-                break;
-            }
+      if (line[i] == '#') {
+        level += 1;
+      } else {
+        break;
+      }
 
-            i += 1;
-        }
-
-        if (level == 0 || line[i] != ' ') {
-            return null;
-        }
-        i += 1;
-
-        scanner.consume(line.length);
-        const content = line.substring(i).trimEnd();
-        const heading = new Heading(level, content);
-        heading.close();
-        return new Node(NODETAG.Heading, heading, this);
+      i += 1;
     }
 
-    match(_block: Block, _scanner: Scanner): boolean {
-        return false;
+    if (level == 0 || line[i] != ' ') {
+      return null;
     }
+    i += 1;
+
+    scanner.consume(line.length);
+    const content = line.substring(i).trimEnd();
+    const heading = new Heading(level, content);
+    heading.close();
+    return new Node(NODETAG.Heading, heading, this);
+  }
+
+  match(_block: Block, _scanner: Scanner): boolean {
+    return false;
+  }
+
+  can_interrupt_paragraph(): boolean {
+    return true;
+  }
+
+  can_accept_indented_line(): boolean {
+    return false;
+  }
+
 }
-
 
 export class IndentedCodeProcessor implements Processor {
   open(scanner: Scanner): Node | null {
-    const begin = scanner.get_position();
-
-
-
-    throw new Error("Method not implemented.");
+    const indent = scanner.get_indent();
+    let pandding = indent - 4;
+    const line = scanner.peekline();
+    const indented_code = new IndentedCode(' '.repeat(pandding) + line);
+    scanner.consume(line.length);
+    return new Node(NODETAG.IndentedCode, indented_code, this);
   }
+
   match(block: Block, scanner: Scanner): boolean {
-    throw new Error("Method not implemented.");
+    const indent = scanner.get_indent();
+
+    if (indent >= 4) {
+      let pandding = indent - 4;
+      const line = scanner.peekline();
+      (block as IndentedCode).content += ' '.repeat(pandding) + line;
+      scanner.consume(line.length);
+      return true;
+    } else {
+      block.close();
+      return false;
+    }
+  }
+
+  can_interrupt_paragraph(): boolean {
+    return false;
+  }
+
+  can_accept_indented_line(): boolean {
+    return true;
   }
 }
 
 export class FencedCodeProcessor implements Processor {
   open(scanner: Scanner): Node | null {
-    throw new Error("Method not implemented.");
+    const indent = scanner.get_indent();
+    const result = this.parse(scanner, "");
+    // console.log(`result = ${result}`);
+    if(result == null) {
+      return null;
+    }
+
+    const fc = new FencedCode(indent, result.length, result.bullet, result.language);
+    return new Node(NODETAG.FencedCode, fc, this);
   }
+
   match(block: Block, scanner: Scanner): boolean {
-    throw new Error("Method not implemented.");
+    const result = this.parse(scanner, (block as FencedCode).bullet);
+    if(result == null) {
+      // TODO: Append this line.
+      return true;
+    }
+
+    if((block as FencedCode).length <= result.length) {
+      // TODO: Append this line.
+        block.close();
+    }
+    return true;
+  }
+
+  
+
+  can_interrupt_paragraph(): boolean {
+    return true;
+  }
+
+  can_accept_indented_line(): boolean {
+    return false;
+  }
+
+  private parse(scanner: Scanner, bullet: string): { bullet: string, length: number, language: string} | null {
+    const line = scanner.peekline();
+    let length = 0;
+    let language = "";
+    for (let c of line) {
+      if (c == '~' || c == '`') {
+        if (bullet == "") {
+          c = bullet;
+        }
+
+        if (c == bullet) {
+          length += 1;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+      scanner.consume();
+    }
+
+    if (length < 3) {
+      return null;
+    }
+    return { bullet, length, language};
   }
 }
 
@@ -119,32 +230,53 @@ export class HtmlBlockProcessor implements Processor {
   open(scanner: Scanner): Node | null {
     throw new Error("Method not implemented.");
   }
+
   match(block: Block, scanner: Scanner): boolean {
     throw new Error("Method not implemented.");
   }
-}
 
-export class LinkReferenceDefinitionProcessor implements Processor {
-  open(scanner: Scanner): Node | null {
-    throw new Error("Method not implemented.");
-  }
-  match(block: Block, scanner: Scanner): boolean {
-    throw new Error("Method not implemented.");
-  }
-}
-
-export class ParagraphProcessor implements Processor {
-  open(scanner: Scanner): Node | null {
-    const skiped_lines = scanner.get_skiped_lines();
-
-    const para = new Paragraph(skiped_lines);
-    scanner.clear_skiped_lines();
-    para.close();
-    return new Node(NODETAG.Paragraph, para, this);
+  can_interrupt_paragraph(): boolean {
+    return true;
   }
 
-  match(_block: Block, _scanner: Scanner): boolean {
+  can_accept_indented_line(): boolean {
     return false;
   }
 
+}
+
+// export class LinkReferenceDefinitionProcessor implements Processor {
+//   open(scanner: Scanner): Node | null {
+//     throw new Error("Method not implemented.");
+//   }
+//   match(block: Block, scanner: Scanner): boolean {
+//     throw new Error("Method not implemented.");
+//   }
+//
+//   can_interrupt_paragraph(): boolean {
+//   }
+// }
+
+export class ParagraphProcessor implements Processor {
+  open(scanner: Scanner): Node | null {
+    const para = new Paragraph(scanner.peekline());
+    return new Node(NODETAG.Paragraph, para, this);
+  }
+
+  match(block: Block, scanner: Scanner): boolean {
+    if (scanner.is_bank_line()) {
+      block.close();
+      scanner.consume(scanner.peekline().length);
+      return true;
+    }
+    return false;
+  }
+
+  can_interrupt_paragraph(): boolean {
+    return false;
+  }
+
+  can_accept_indented_line(): boolean {
+    return false;
+  }
 }

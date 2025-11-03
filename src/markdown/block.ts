@@ -13,7 +13,7 @@ class BaseBlock implements Block {
   close(): void {
     this.opened = false;
   }
-  
+
   private opened: boolean = true;
 }
 
@@ -42,15 +42,17 @@ export class Heading extends BaseBlock {
 }
 
 export class IndentedCode extends BaseBlock {
-  constructor() {
+  constructor(public content: string) {
     super();
   }
 }
 
 export class FencedCode extends BaseBlock {
-  constructor(public readonly offset: number, public readonly length: number, public readonly bullet: string) {
+  constructor(public readonly offset: number, public readonly length: number, public readonly bullet: string, public readonly language: string) {
     super();
   }
+
+  content: string = "";
 }
 
 export class HtmlBlock extends BaseBlock {
@@ -66,7 +68,7 @@ export class LinkReferenceDefinition extends BaseBlock {
 }
 
 export class Paragraph extends BaseBlock {
-  constructor(public readonly content: string) {
+  constructor(public content: string) {
     super();
   }
 }

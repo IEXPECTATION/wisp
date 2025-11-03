@@ -1,62 +1,59 @@
 import { Node, NODETAG } from "./node";
-import { BlockQuoteProcessor, HeadingProcessor, ParagraphProcessor, Processor } from "./processor";
+import { BlockQuoteProcessor, FencedCodeProcessor, HeadingProcessor, IndentedCodeProcessor, ParagraphProcessor, Processor } from "./processor";
 import { ArriveEndOfInput, Scanner } from "./scanner";
-
-type IndentInfo = {
-  indent: number,
-  column: number
-};
+import { Paragraph } from "./block";
+import { match } from "assert";
 
 export class Parser {
   constructor(private readonly scanner: Scanner) { }
 
-  parse(): Error | null {
+  parse(): Node | Error {
+    let err = undefined;
     while (true) {
-      let err = this.open_new_nodes()
+      err = this.open_new_nodes()
       if (err != null) {
-        if (err == ArriveEndOfInput) {
-          if (this.scanner.has_skiped_lines()) {
-            this.parse_skiped_lines()
-          }
-          this.close_nodes(this.root.get_last_node());
-          break;
-        } else {
-          return err;
-        }
+        break;
       }
-      this.match_opened_blocks()
+      err = this.match_opened_blocks()
+      if (err != null) {
+        break;
+      }
     }
-    return null;
+
+    if (err == ArriveEndOfInput) {
+      this.close_nodes(this.root.get_last_node());
+      return this.root;
+    } else {
+      return err;
+    }
   }
 
   private open_new_nodes(): Error | null {
     while (true) {
-      const indent_info = this.get_indent();
-      if (this.is_blank_line() && this.scanner.has_skiped_lines()) {
-        this.parse_skiped_lines();
-        break;
-      } else if (indent_info != null && indent_info.indent >= 4 && !this.scanner.has_skiped_lines()) {
-        // TODO: Check this line whether starts with 4 space or a tab.
-        // The parsing will be prevented, If there is skiped linse.
-      } else {
-        const node = this.open_new_node();
-        if (node == null) {
-          this.scanner.skip_line()
-          break;
-        } else {
-          if (this.scanner.has_skiped_lines()) {
-            this.parse_skiped_lines();
-            if (node.tag != this.container.tag) {
-              this.close_nodes(this.root.get_last_node());
-              this.container = this.root;
-            }
-          }
-          this.container.push_node(node);
-          if (node.is_left_block()) {
-            break;
-          }
-          this.container = node;
+      const node = this.open_new_node();
+      if (node == null) {
+        if (!this.maybe_lazy) {
+          return new Error("No nodes are opened.");
         }
+        console.assert(this.current.get_last_node()?.element?.is_open(), "Try to modity an closed block.");
+        const par = this.current.get_last_node()?.element as Paragraph;
+        par.content += this.scanner.peekline();
+        break;
+      } else {
+        if (this.maybe_lazy) {
+          this.close_nodes(this.current.get_last_node());
+          this.maybe_lazy = false;
+        }
+
+        console.assert(!this.current.is_left_block(), "Try to push a node to a leaf block.");
+        this.current.push_node(node);
+        if (node.is_left_block()) {
+          if (node.tag == NODETAG.Paragraph) {
+            this.maybe_lazy = true;
+          }
+          break;
+        }
+        this.current = node;
       }
     }
 
@@ -68,7 +65,18 @@ export class Parser {
   }
 
   private open_new_node(): Node | null {
+    // Figure out the indent of this line.
+    this.scanner.scan_indent();
+    const indent = this.scanner.get_indent();
     for (let p of this.processors) {
+      if (this.maybe_lazy && !p.can_interrupt_paragraph()) {
+        continue;
+      }
+
+      if (p.can_accept_indented_line() && (indent < 4 || this.maybe_lazy)) {
+        continue;
+      }
+
       const node = p.open(this.scanner);
       if (node != null) {
         return node;
@@ -77,45 +85,49 @@ export class Parser {
     return null;
   }
 
-  private match_opened_blocks(): void {
+  private match_opened_blocks(): Error | null {
     let matched = this.root;
-    while (matched.has_children()) {
-      if (!matched.is_last_element_opened()) {
-        break;
-      }
+    let goon = true;
+    while (goon) {
+      matched = this.root;
+      while (matched.has_children()) {
+        console.log("wuch: 0");
+        console.dir(matched.tag);
+        if (!matched.is_last_element_opened()) {
+          console.log("wuch: 1");
+          console.dir(matched.tag);
+          goon = false;
+          break;
+        }
 
-      const child = matched.get_last_node()!;
-      let ok = child.process!.match(child.element!, this.scanner);
-      if (!ok) {
-        break;
-      }
-      matched = child;
-    }
+        this.scanner.scan_indent();
+        const child = matched.get_last_node()!;
+        let ok = child.process!.match(child.element!, this.scanner);
+        if (!ok) {
+          console.log("wuch: 2");
+          goon = false;
+          break;
+        }
 
-    if (matched == this.root) {
-      // This line may be a lazy paragraph.
-      if (!this.scanner.has_skiped_lines()) {
-        // Close this node and all parent nodes of it.
-        this.close_nodes(this.root.get_last_node());
-        this.container = this.root;
-      }
-    } else {
-      if (matched != this.container && !this.scanner.has_skiped_lines()) {
-        this.container = matched;
-      }
-    }
-  }
+        if (child.is_left_block()) {
+          const err = this.scanner.readline();
+          if (err != null) {
+            return err;
+          }
 
-  private parse_skiped_lines(): void {
-    for (let p of this.fallback_processors) {
-      const node = p.open(this.scanner)
-      if (node == null) {
-        continue;
+          if (this.maybe_lazy && child.tag == NODETAG.Paragraph && !child.element?.is_open()) {
+            this.maybe_lazy = false;
+          }
+          console.log("wuch: 3");
+          console.dir(matched.tag);
+          break;
+        } else {
+          matched = child;
+        }
       }
-      this.container.push_node(node);
-      break;
     }
-    this.scanner.clear_skiped_lines();
+    this.current = matched;
+    return null;
   }
 
   private close_nodes(node: Node | null): void {
@@ -127,38 +139,9 @@ export class Parser {
     this.close_nodes(node.get_last_node());
   }
 
-  private is_blank_line(): boolean {
-    const line = this.scanner.peekline();
-    for (let c of line) {
-      if (c != ' ' && c != '\r' && c != '\n' && c != '\t') {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private get_indent(): IndentInfo | null {
-    const line = this.scanner.peekline();
-    if (line[0] == '\t') {
-      return { indent: 4, column: 1 };
-    } else {
-      let indent = 0;
-      for(let c of line) {
-        if(c == ' ') {
-          indent += 1;
-        }
-      }
-
-      if(indent != 0) {
-        return {indent, column: indent};
-      } else {
-        return null;
-      }
-    }
-  }
-
-  root: Node = new Node(NODETAG.Document);
-  private container: Node = this.root;
-  private processors: Processor[] = [new BlockQuoteProcessor(), new HeadingProcessor()];
-  private fallback_processors: Processor[] = [new ParagraphProcessor()];
+  // Indicates that is parsing the paragraph and checks the next line is a continuation paragraph or not.
+  private maybe_lazy: boolean = false;
+  private root: Node = new Node(NODETAG.Document);
+  private current: Node = this.root;
+  private processors: Processor[] = [new BlockQuoteProcessor(), new HeadingProcessor(), new IndentedCodeProcessor(), new FencedCodeProcessor(), new ParagraphProcessor()];
 }

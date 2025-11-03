@@ -44,7 +44,7 @@ export class Node {
   is_container_block(): boolean {
     return this.tag > NODETAG.ContainerBlockStart && this.tag < NODETAG.ContainerBlockEnd;
   }
-  
+
   is_left_block(): boolean {
     return this.tag > NODETAG.LeafBlockStart && this.tag < NODETAG.LeafBlockEnd;
   }
@@ -61,6 +61,10 @@ export class Node {
     return this.children.length != 0;
   }
 
+  get_children(): Node[] {
+    return this.children;
+  }
+
   is_last_element_opened(): boolean {
     return this.get_last_node()?.element?.is_open() ?? false;
   }
@@ -69,7 +73,7 @@ export class Node {
     if (this.children.length != 0) {
       return this.children[this.children.length - 1];
     }
-    return undefined;
+    return null;
   }
 
   push_node(n: Node) {

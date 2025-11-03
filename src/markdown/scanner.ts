@@ -21,27 +21,39 @@ export class Scanner {
     return this.position;
   }
 
-  has_skiped_lines(): boolean {
-    return this.skiped_lines_begin != this.skiped_lines_end;
-  }
-
-  skip_line(): void {
-    if (!this.has_skiped_lines()) {
-      this.skiped_lines_begin = this.position - (this.line_buffer.length - this.column);
-    }
-    this.skiped_lines_end = this.position;
-  }
-
-  get_skiped_lines(): string {
-    return this.input.substring(this.skiped_lines_begin, this.skiped_lines_end);
-  }
-
-  clear_skiped_lines(): void {
-    this.skiped_lines_begin = this.skiped_lines_end = 0;
-  }
-
   peekline(): string {
     return this.line_buffer.substring(this.column);
+  }
+
+  get_indent() {
+    return this.indent;
+  }
+
+  scan_indent() {
+    const line = this.peekline();
+    this.indent = 0;
+    let column = 0;  
+    for (let c of line) {
+      if (c == ' ') {
+        this.indent += 1;
+      } else if (c == '\t') {
+        this.indent += 4;
+      } else {
+        break;
+      }
+      column += 1;
+    }
+    this.consume(column);
+  }
+
+  is_bank_line(): boolean {
+    let line = this.peekline();
+    for (let c of line) {
+      if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+        return false;
+      }
+    }
+    return true;
   }
 
   consume(n: number = 1): void {
@@ -71,6 +83,7 @@ export class Scanner {
       s += c;
       if (c == '\r') {
         if (is_return) {
+          this.position -= 1;
           break;
         }
         is_return = true;
@@ -87,10 +100,8 @@ export class Scanner {
 
   private row: number = 0;
   private column: number = 0;
-  private skiped_lines_begin: number = 0;
-  private skiped_lines_end: number = 0;
   private line_buffer: string = "";
-  private begin: number = 0;
   private position: number = 0;
   private input: string;
+  private indent:number = 0;
 }
