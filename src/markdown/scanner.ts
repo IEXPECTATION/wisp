@@ -34,7 +34,7 @@ export class Scanner {
     return this.indent;
   }
 
-  skip_whitesoace() {
+  skip_whitesPace() {
     const line = this.peekline();
     this.indent = 0;
     let column = 0;
