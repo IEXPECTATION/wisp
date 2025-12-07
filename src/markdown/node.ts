@@ -13,13 +13,13 @@ export const NODETAG = {
 
   // LeafBlock 
   LeafBlockStart: 6,
-  Heading: 7,
-  IndentedCode: 8,
-  FencedCode: 9,
-  HtmlBlock: 10,
-  LinkReferenceDefinition: 11,
-  Paragraph: 12,
-  BlockEnd: 13,
+  ThematicBreak: 7,
+  Heading: 8,
+  IndentedCode: 9,
+  FencedCode: 10,
+  HtmlBlock: 11,
+  LinkReferenceDefinition: 12,
+  Paragraph: 13,
   LeafBlockEnd: 14,
 
   // inlines

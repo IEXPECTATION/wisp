@@ -1,11 +1,9 @@
-import { Processor } from "./processor";
-
 export interface Block {
   is_open(): boolean;
   close(): void;
 }
 
-class BaseBlock implements Block {
+export class BaseBlock implements Block {
   is_open(): boolean {
     return this.opened;
   }
@@ -18,7 +16,7 @@ class BaseBlock implements Block {
 }
 
 export class List extends BaseBlock {
-  constructor(public readonly bullet: string) {
+  constructor(public readonly sign: string | number) {
     super();
   }
 }
@@ -30,6 +28,12 @@ export class ListItem extends BaseBlock {
 }
 
 export class BlockQuote extends BaseBlock {
+  constructor() {
+    super();
+  }
+}
+
+export class ThematicBreak extends BaseBlock {
   constructor() {
     super();
   }

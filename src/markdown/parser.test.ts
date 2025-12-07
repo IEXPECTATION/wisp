@@ -2,35 +2,21 @@ import { NODETAG, Node, NodeTag } from "./node";
 import { Parser } from "./parser"
 import { Scanner } from "./scanner";
 
-function nodetag_dfs(node: Node, node_tags: { "tag": NodeTag, "depth": number }[]): void {
+function check_node_dfs(node: Node, node_info: { "tag": NodeTag, "depth": number, content?: string }[]): void {
   let index = 0;
-  function dfs_helper(node: Node, node_tags: { "tag": NodeTag, "depth": number }[], depth: number) {
+  function dfs_helper(node: Node, node_info: { "tag": NodeTag, "depth": number, content?: string }[], depth: number) {
     if (node.tag != NODETAG.Document) {
       expect(node.element?.is_open()).toEqual(false);
     }
-    expect(node.tag).toEqual(node_tags[index]["tag"]);
-    expect(depth).toEqual(node_tags[index]["depth"]);
+    expect(node.tag).toEqual(node_info[index]["tag"]);
+    expect(depth).toEqual(node_info[index]["depth"]);
     index += 1;
     for (let child of node.get_children()) {
-      dfs_helper(child, node_tags, depth + 1);
+      dfs_helper(child, node_info, depth + 1);
     }
   }
-  dfs_helper(node, node_tags, 0);
-  expect(index).toEqual(node_tags.length);
-}
-
-function node_content_dfs(node: Node, node_contents: string[]): void {
-  let index = 0;
-  function dfs_helper(node: Node, node_contents: string[]) {
-    if (node.is_left_block()) {
-      //  TODO: Check the content of node.
-      index += 1;
-      for (let child of node.get_children()) {
-        dfs_helper(child, node_contents);
-      }
-    }
-  }
-  dfs_helper(node, node_contents);
+  dfs_helper(node, node_info, 0);
+  expect(index).toEqual(node_info.length);
 }
 
 test("paragraph test I", () => {
@@ -38,10 +24,10 @@ test("paragraph test I", () => {
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
   const root = p.parse();
-  console.dir(root, {depth: Infinity});
+  console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    nodetag_dfs(root,
+    check_node_dfs(root,
       [{ "tag": NODETAG.Document, "depth": 0 },
       { "tag": NODETAG.BlockQuote, "depth": 1 },
       { "tag": NODETAG.Paragraph, "depth": 2 },

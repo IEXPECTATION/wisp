@@ -17,11 +17,16 @@ export class Scanner {
     return this.column;
   }
 
+  get_lien_begin(): number {
+    return this.line_begin; 
+  }
+
   get_position(): number {
     return this.position;
   }
 
   peekline(): string {
+    console.assert(this.column < this.line_buffer.length, "The column is not less than length of buffer");
     return this.line_buffer.substring(this.column);
   }
 
@@ -29,10 +34,10 @@ export class Scanner {
     return this.indent;
   }
 
-  scan_indent() {
+  skip_whitesoace() {
     const line = this.peekline();
     this.indent = 0;
-    let column = 0;  
+    let column = 0;
     for (let c of line) {
       if (c == ' ') {
         this.indent += 1;
@@ -75,12 +80,11 @@ export class Scanner {
     }
 
     let is_return = false;
-    let s = "";
-
+    this.line_begin = this.position;
+    
     while (this.position < this.input.length) {
       const c = this.input[this.position];
       this.position += 1;
-      s += c;
       if (c == '\r') {
         if (is_return) {
           this.position -= 1;
@@ -94,14 +98,15 @@ export class Scanner {
 
     this.column = 0;
     this.row += 1;
-    this.line_buffer = s;
+    this.line_buffer = this.input.substring(this.line_begin, this.position);
     return null;
   }
 
+  private indent: number = 0;
   private row: number = 0;
   private column: number = 0;
+  private line_begin: number = 0;
   private line_buffer: string = "";
   private position: number = 0;
   private input: string;
-  private indent:number = 0;
 }

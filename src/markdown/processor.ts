@@ -1,6 +1,6 @@
 import { Block, BlockQuote, FencedCode, Heading, IndentedCode, Paragraph } from "./block";
 import { Node, NODETAG } from "./node";
-import { ArriveEndOfInput, Scanner } from "./scanner";
+import { Scanner } from "./scanner";
 
 export interface Processor {
   open(scanner: Scanner): Node | null;
@@ -11,7 +11,17 @@ export interface Processor {
 
 export class ListProcessor implements Processor {
   open(scanner: Scanner): Node | null {
-    throw new Error("Method not implemented.");
+    const line = scanner.peekline();
+    if (line[0] == '-' || line[0] == '+' || line[0] == '*') {
+      const bullet = line[0];
+      // unordered list
+      return null;
+    } else if (line[0] >= '1' && line[0] <= '9') {
+      // ordered list
+      return null;
+    } else {
+      return null;
+    }
   }
   match(block: Block, scanner: Scanner): boolean {
     throw new Error("Method not implemented.");
@@ -79,6 +89,22 @@ export class BlockQuoteProcessor implements Processor {
     }
     return true;
   }
+}
+
+export class ThematicBreakProcessor implements Processor {
+  open(scanner: Scanner): Node | null {
+    throw new Error("Method not implemented.");
+  }
+  match(block: Block, scanner: Scanner): boolean {
+    throw new Error("Method not implemented.");
+  }
+  can_interrupt_paragraph(): boolean {
+    throw new Error("Method not implemented.");
+  }
+  can_accept_indented_line(): boolean {
+    throw new Error("Method not implemented.");
+  }
+
 }
 
 export class HeadingProcessor implements Processor {
@@ -165,8 +191,7 @@ export class FencedCodeProcessor implements Processor {
   open(scanner: Scanner): Node | null {
     const indent = scanner.get_indent();
     const result = this.parse(scanner, "");
-    // console.log(`result = ${result}`);
-    if(result == null) {
+    if (result == null) {
       return null;
     }
 
@@ -176,19 +201,18 @@ export class FencedCodeProcessor implements Processor {
 
   match(block: Block, scanner: Scanner): boolean {
     const result = this.parse(scanner, (block as FencedCode).bullet);
-    if(result == null) {
-      // TODO: Append this line.
+    if (result == null) {
+      this.append_line(block, scanner);
       return true;
     }
 
-    if((block as FencedCode).length <= result.length) {
-      // TODO: Append this line.
-        block.close();
+    if ((block as FencedCode).length <= result.length) {
+      block.close();
+    } else {
+      this.append_line(block, scanner);
     }
     return true;
   }
-
-  
 
   can_interrupt_paragraph(): boolean {
     return true;
@@ -198,7 +222,7 @@ export class FencedCodeProcessor implements Processor {
     return false;
   }
 
-  private parse(scanner: Scanner, bullet: string): { bullet: string, length: number, language: string} | null {
+  private parse(scanner: Scanner, bullet: string): { bullet: string, length: number, language: string } | null {
     const line = scanner.peekline();
     let length = 0;
     let language = "";
@@ -222,7 +246,23 @@ export class FencedCodeProcessor implements Processor {
     if (length < 3) {
       return null;
     }
-    return { bullet, length, language};
+    return { bullet, length, language };
+  }
+
+  private append_line(block: Block, scanner: Scanner) {
+    let indent = (block as FencedCode).offset;
+    const line = scanner.peekline();
+    let i = 0;
+    for (i = 0; i < line.length && indent > 0; i++) {
+      if (line[i] != ' ') {
+        break;
+      }
+      i += 1;
+      indent -= 1;
+    }
+
+    (block as FencedCode).content += line.substring(i);
+    scanner.consume(line.length);
   }
 }
 
@@ -242,7 +282,6 @@ export class HtmlBlockProcessor implements Processor {
   can_accept_indented_line(): boolean {
     return false;
   }
-
 }
 
 // export class LinkReferenceDefinitionProcessor implements Processor {

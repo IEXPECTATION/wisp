@@ -66,7 +66,7 @@ export class Parser {
 
   private open_new_node(): Node | null {
     // Figure out the indent of this line.
-    this.scanner.scan_indent();
+    this.scanner.skip_whitesoace();
     const indent = this.scanner.get_indent();
     for (let p of this.processors) {
       if (this.maybe_lazy && !p.can_interrupt_paragraph()) {
@@ -100,7 +100,7 @@ export class Parser {
           break;
         }
 
-        this.scanner.scan_indent();
+        this.scanner.skip_whitesoace();
         const child = matched.get_last_node()!;
         let ok = child.process!.match(child.element!, this.scanner);
         if (!ok) {
