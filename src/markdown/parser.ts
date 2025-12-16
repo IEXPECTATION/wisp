@@ -1,147 +1,228 @@
-import { Node, NODETAG } from "./node";
-import { BlockQuoteProcessor, FencedCodeProcessor, HeadingProcessor, IndentedCodeProcessor, ParagraphProcessor, Processor } from "./processor";
-import { ArriveEndOfInput, Scanner } from "./scanner";
-import { Paragraph } from "./block";
-import { match } from "assert";
+import { Node, NODE_TAG } from "./node";
+import { Scanner, TAB_SIZE } from "./scanner";
 
 export class Parser {
-  constructor(private readonly scanner: Scanner) { }
+  constructor(private readonly scanner: Scanner) { scanner.consume(); }
 
   parse(): Node | Error {
-    let err = undefined;
-    while (true) {
-      err = this.open_new_nodes()
-      if (err != null) {
-        break;
-      }
-      err = this.match_opened_blocks()
-      if (err != null) {
-        break;
-      }
-    }
-
-    if (err == ArriveEndOfInput) {
-      this.close_nodes(this.root.get_last_node());
-      return this.root;
-    } else {
-      return err;
-    }
-  }
-
-  private open_new_nodes(): Error | null {
-    while (true) {
-      const node = this.open_new_node();
-      if (node == null) {
-        if (!this.maybe_lazy) {
-          return new Error("No nodes are opened.");
-        }
-        console.assert(this.current.get_last_node()?.element?.is_open(), "Try to modity an closed block.");
-        const par = this.current.get_last_node()?.element as Paragraph;
-        par.content += this.scanner.peekline();
-        break;
-      } else {
-        if (this.maybe_lazy) {
-          this.close_nodes(this.current.get_last_node());
-          this.maybe_lazy = false;
-        }
-
-        console.assert(!this.current.is_left_block(), "Try to push a node to a leaf block.");
-        this.current.push_node(node);
-        if (node.is_left_block()) {
-          if (node.tag == NODETAG.Paragraph) {
-            this.maybe_lazy = true;
-          }
-          break;
-        }
-        this.current = node;
-      }
-    }
-
-    const err = this.scanner.readline();
+    let document = new Node(NODE_TAG.Document);
+    let err = this.parse_block(document);
     if (err != null) {
       return err;
     }
-    return null;
+    return document;
   }
 
-  private open_new_node(): Node | null {
-    // Figure out the indent of this line.
-    this.scanner.skip_whitesPace();
-    const indent = this.scanner.get_indent();
-    for (let p of this.processors) {
-      if (this.maybe_lazy && !p.can_interrupt_paragraph()) {
-        continue;
+  parse_block(root: Node): Error | null {
+    let parent = root;
+    while (true) {
+      // Firstly, we try to open a new block.
+      const node = this.try_open_block(parent);
+
+      if (node == null) {
+        return new Error("Cound not open new block.");
       }
 
-      if (p.can_accept_indented_line() && (indent < 4 || this.maybe_lazy)) {
-        continue;
+      // Push this node to our cache.
+      this.cached_nodes.push(node);
+      if (node.is_left_block()) {
+        // If we open a new leaf block, It means the current line has been parsed.
+        // So we move to the next line.
+        break;
       }
 
-      const node = p.open(this.scanner);
-      if (node != null) {
-        return node;
+      // Otherwise, we open a container block. Continue to open new block.
+      console.assert(node.is_container_block(), "The opened node is not a container block!");
+      parent = node;
+    }
+
+
+    const is_continuation_paragraph = this.is_continuation_paragraph();
+
+    // Continue to parse the next line.
+    for(let node of this.cached_nodes) {
+      // parse the multiple line block
+      switch(node.tag) {
+        case NODE_TAG.List:
+          break;
+        case NODE_TAG.ListItem:
+          break;
+        case NODE_TAG.BlockQuote:
+          break;
+        case NODE_TAG.IndentedCode:
+          break;
+        case NODE_TAG.FencedCode:
+          break;
+        case NODE_TAG.HtmlBlock:
+          break;
+        default:
+          break;
+      }
+
+      // if there are not any node parsed 
+      if(is_continuation_paragraph) {
+
       }
     }
     return null;
   }
 
-  private match_opened_blocks(): Error | null {
-    let matched = this.root;
-    let goon = true;
-    while (goon) {
-      matched = this.root;
-      while (matched.has_children()) {
-        console.log("wuch: 0");
-        console.dir(matched.tag);
-        if (!matched.is_last_element_opened()) {
-          console.log("wuch: 1");
-          console.dir(matched.tag);
-          goon = false;
-          break;
-        }
 
-        this.scanner.skip_whitesPace();
-        const child = matched.get_last_node()!;
-        let ok = child.process!.match(child.element!, this.scanner);
-        if (!ok) {
-          console.log("wuch: 2");
-          goon = false;
-          break;
-        }
-
-        if (child.is_left_block()) {
-          const err = this.scanner.readline();
-          if (err != null) {
-            return err;
-          }
-
-          if (this.maybe_lazy && child.tag == NODETAG.Paragraph && !child.element?.is_open()) {
-            this.maybe_lazy = false;
-          }
-          console.log("wuch: 3");
-          console.dir(matched.tag);
-          break;
-        } else {
-          matched = child;
-        }
-      }
+  try_open_block(parent: Node): Node | null {
+    const [indent, ok] = this.scanner.skip_whitespace();
+    if (!ok) {
+      return null;
     }
-    this.current = matched;
+
+    const is_continuation_paragraph = this.is_continuation_paragraph();
+    if (!is_continuation_paragraph && indent >= TAB_SIZE) {
+      // indented code
+      return this.parse_indentedcode(parent);
+    }
+
+    // console.log(this.scanner.peek);
+    switch (this.scanner.peek) {
+      case '*':
+      case '-': {
+        // unordered list or thematic break
+        let node = this.parse_thematicbreak(parent);
+        if (node != null) {
+          return node;
+        }
+
+        return null;
+      }
+      case '_':
+        // thematic break
+        return this.parse_thematicbreak(parent);
+      case '+': {
+        // unordered list
+      }
+        break;
+      case '>':
+        // blockquote
+        return this.parse_blockquote(parent);
+      case '#':
+        // heading
+        return this.parse_heading(parent);
+      case '~':
+      case '`': {
+        // fenced code
+      }
+      case '<': {
+        // html block
+      }
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9': {
+        // ordered list
+      }
+      default:
+        // TODO: do nothing or parse paragraph?
+        break;
+    }
+
+    // fallback to paragraph
+    if(is_continuation_paragraph) {
+      // We skip this line and let it to be parsed by parse_block.
+      return null;
+    }
+
+    // parse the paragraph
+    
     return null;
   }
 
-  private close_nodes(node: Node | null): void {
-    if (node == null || !node?.element?.is_open()) {
-      return;
-    }
-
-    node.element?.close();
-    this.close_nodes(node.get_last_node());
+  parse_list(): Node | null {
+    return null;
   }
 
-  // Indicates that is parsing the paragraph and checks the next line is a continuation paragraph or not.
-  private maybe_lazy: boolean = false;
-  private root: Node = new Node(NODETAG.Document);
-  private current: Node = this.root;
-  private processors: Processor[] = [new BlockQuoteProcessor(), new HeadingProcessor(), new IndentedCodeProcessor(), new FencedCodeProcessor(), new ParagraphProcessor()];
+  parse_blockquote(parent: Node): Node | null {
+    const start = this.scanner.get_position();
+    const row = this.scanner.get_row();
+    const column = this.scanner.get_column();
+    this.scanner.consume();
+    this.scanner.consume_if(' ');
+    const end = this.scanner.get_position();
+
+    const bq = new Node(NODE_TAG.BlockQuote, { row, column, start, end });
+    parent.push_node(bq);
+    return bq;
+  }
+
+  parse_thematicbreak(parent: Node): Node | null {
+    const start = this.scanner.get_position();
+    const row = this.scanner.get_row();
+    const column = this.scanner.get_column();
+
+    let length = 1;
+    const bullet = this.scanner.peek;
+    this.scanner.consume();
+    while (this.scanner.peek && (this.scanner.peek == ' ' || this.scanner.peek == '\t' || this.scanner.peek == bullet)) {
+      this.scanner.consume();
+      length += 1;
+    }
+
+    if (length < 3) {
+      // Back to the start.
+      this.scanner.set_postion(start);
+      return null;
+    }
+    const end = this.scanner.get_position();
+
+    const tb = new Node(NODE_TAG.ThematicBreak, { row, column, start, end });
+    parent.push_node(tb);
+    return tb;
+  }
+
+  parse_heading(parent: Node): Node | null {
+    let level = 1;
+    this.scanner.consume();
+    while (this.scanner.consume_if('#') && level <= 6) {
+      level += 1;
+    }
+
+    if (this.scanner.peek != ' ') {
+      return null;
+    }
+    this.scanner.consume();
+
+    const start = this.scanner.get_position();
+    const row = this.scanner.get_row();
+    const column = this.scanner.get_column();
+    this.scanner.consume_line();
+    const end = this.scanner.get_position();
+    const h = new Node(NODE_TAG.Heading, { row, column, start, end }, { level });
+    parent.push_node(h);
+    return h;
+  }
+
+  parse_indentedcode(parent: Node): Node | null {
+    return null;
+  }
+
+  parse_fencedcode(parent: Node): Node | null {
+    return null;
+  }
+
+  private is_continuation_paragraph(): boolean {
+    let last_node = undefined;
+    if (this.cached_nodes.length > 0) {
+      last_node = this.cached_nodes[this.cached_nodes.length - 1];
+    }
+    return last_node != undefined && last_node.is(NODE_TAG.Paragraph);
+  }
+
+  private cached_nodes: Node[] = [];
 }
+
+const s = new Scanner(">>  * * *");
+const p = new Parser(s);
+const d = p.parse();
+console.dir(d, { depth: Infinity });

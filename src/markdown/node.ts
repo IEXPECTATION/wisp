@@ -1,7 +1,11 @@
-import { Block } from "./block";
-import { Processor } from "./processor";
+type Location = {
+  row: number,
+  column: number,
+  start: number;
+  end: number;
+};
 
-export const NODETAG = {
+export const NODE_TAG = {
   Document: 0,
 
   // ContainerBlock
@@ -36,17 +40,25 @@ export const NODETAG = {
   InlineEnd: 25,
 } as const;
 
-export type NodeTag = typeof NODETAG[keyof typeof NODETAG];
+export type NodeTag = typeof NODE_TAG[keyof typeof NODE_TAG];
 
 export class Node {
-  constructor(public readonly tag: NodeTag, public readonly element?: Block, public readonly process?: Processor) { }
+  constructor(public readonly tag: NodeTag, public readonly localtion?: Location, public readonly context?: Context) { }
+
+  is(tag: NodeTag): boolean {
+    return this.tag == tag;
+  }
+
+  is_not(tag: NodeTag): boolean {
+    return this.tag != tag;
+  }
 
   is_container_block(): boolean {
-    return this.tag > NODETAG.ContainerBlockStart && this.tag < NODETAG.ContainerBlockEnd;
+    return this.tag > NODE_TAG.ContainerBlockStart && this.tag < NODE_TAG.ContainerBlockEnd;
   }
 
   is_left_block(): boolean {
-    return this.tag > NODETAG.LeafBlockStart && this.tag < NODETAG.LeafBlockEnd;
+    return this.tag > NODE_TAG.LeafBlockStart && this.tag < NODE_TAG.LeafBlockEnd;
   }
 
   is_block(): boolean {
@@ -54,7 +66,7 @@ export class Node {
   }
 
   is_inline(): boolean {
-    return this.tag > NODETAG.InlineStart && this.tag < NODETAG.InlineEnd
+    return this.tag > NODE_TAG.InlineStart && this.tag < NODE_TAG.InlineEnd
   }
 
   has_children(): boolean {
@@ -65,21 +77,9 @@ export class Node {
     return this.children;
   }
 
-  is_last_element_opened(): boolean {
-    return this.get_last_node()?.element?.is_open() ?? false;
-  }
-
-  get_last_node(): Node | null {
-    if (this.children.length != 0) {
-      return this.children[this.children.length - 1];
-    }
-    return null;
-  }
-
   push_node(n: Node) {
     if (!this.children.includes(n)) {
       this.children.push(n);
-      n.parent = this;
     }
   }
 
@@ -87,6 +87,5 @@ export class Node {
     return this.children.pop()
   }
 
-  parent: Node | null = null;
   private children: Node[] = [];
 }

@@ -1,11 +1,11 @@
-import { NODETAG, Node, NodeTag } from "./node";
+import { NODE_TAG, Node, NodeTag } from "./node";
 import { Parser } from "./parser"
 import { Scanner } from "./scanner";
 
 function check_node_dfs(node: Node, node_info: { "tag": NodeTag, "depth": number, content?: string }[]): void {
   let index = 0;
   function dfs_helper(node: Node, node_info: { "tag": NodeTag, "depth": number, content?: string }[], depth: number) {
-    if (node.tag != NODETAG.Document) {
+    if (node.tag != NODE_TAG.Document) {
       expect(node.element?.is_open()).toEqual(false);
     }
     expect(node.tag).toEqual(node_info[index]["tag"]);
@@ -28,10 +28,10 @@ test("paragraph test I", () => {
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
     check_node_dfs(root,
-      [{ "tag": NODETAG.Document, "depth": 0 },
-      { "tag": NODETAG.BlockQuote, "depth": 1 },
-      { "tag": NODETAG.Paragraph, "depth": 2 },
-      { "tag": NODETAG.Paragraph, "depth": 2 }]);
+      [{ "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.BlockQuote, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 2 },
+      { "tag": NODE_TAG.Paragraph, "depth": 2 }]);
   }
 });
 

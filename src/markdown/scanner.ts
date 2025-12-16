@@ -1,12 +1,18 @@
 export const ArriveEndOfInput = new Error("Arrive the end of input string.");
 
+export const TAB_SIZE = 4;
+
 export class Scanner {
   constructor(input: string) {
     this.input = input;
-    const err = this.readline();
-    if (err != null) {
-      throw err;
-    }
+  }
+
+  get_position(): number {
+    return this.position - 1;
+  }
+
+  set_postion(pos: number): void {
+    this.position = pos;
   }
 
   get_row(): number {
@@ -17,96 +23,73 @@ export class Scanner {
     return this.column;
   }
 
-  get_lien_begin(): number {
-    return this.line_begin; 
-  }
+  skip_whitespace(): [number, boolean] {
+    if (this.peek == undefined) {
+      return [0, false];
+    }
 
-  get_position(): number {
-    return this.position;
-  }
-
-  peekline(): string {
-    console.assert(this.column < this.line_buffer.length, "The column is not less than length of buffer");
-    return this.line_buffer.substring(this.column);
-  }
-
-  get_indent() {
-    return this.indent;
-  }
-
-  skip_whitesPace() {
-    const line = this.peekline();
-    this.indent = 0;
-    let column = 0;
-    for (let c of line) {
-      if (c == ' ') {
-        this.indent += 1;
-      } else if (c == '\t') {
-        this.indent += 4;
+    let indent = 0;
+    let tab_size = TAB_SIZE;
+    while (true) {
+      if (this.peek == ' ') {
+        indent += 1;
+        tab_size -= 1;
+        if (tab_size == 0) {
+          tab_size = TAB_SIZE;
+        }
+        this.consume()
+      } else if (this.peek == '\t') {
+        indent += tab_size;
+        tab_size = TAB_SIZE;
       } else {
         break;
       }
-      column += 1;
     }
-    this.consume(column);
+
+    return [indent, true];
   }
 
-  is_bank_line(): boolean {
-    let line = this.peekline();
-    for (let c of line) {
-      if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
-        return false;
+  consume(): void {
+    if (this.position >= this.input.length) {
+      this.peek = undefined;
+    } else {
+      this.peek = this.input[this.position];
+      this.position += 1;
+      this.column += 1;
+    }
+  }
+
+  consume_if(c: string): boolean {
+    if (this.peek == c) {
+      this.consume()
+      return true;
+    }
+    return false;
+  }
+
+  consume_line(): void {
+    while (this.position < this.input.length) {
+      if (this.peek == '\r') {
+        this.consume();
+        this.consume_if('\n');
+        break;
+      } else if(this.peek == '\n') {
+        break;
+      } else {
+        this.consume();
       }
     }
-    return true;
+    this.increment_row();
   }
 
-  consume(n: number = 1): void {
-    if (this.column + n < 0) {
-      return;
-    }
-
-    if (this.column + n >= this.line_buffer.length) {
-      this.column = this.line_buffer.length;
-      return;
-    }
-
-    this.column += n;
-  }
-
-  readline(): Error | null {
-    if (this.position == this.input.length) {
-      return ArriveEndOfInput;
-    }
-
-    let is_return = false;
-    this.line_begin = this.position;
-    
-    while (this.position < this.input.length) {
-      const c = this.input[this.position];
-      this.position += 1;
-      if (c == '\r') {
-        if (is_return) {
-          this.position -= 1;
-          break;
-        }
-        is_return = true;
-      } else if (c == '\n') {
-        break;
-      } else { }
-    }
-
-    this.column = 0;
+  increment_row(): void {
     this.row += 1;
-    this.line_buffer = this.input.substring(this.line_begin, this.position);
-    return null;
+    this.column = 0;
   }
 
-  private indent: number = 0;
-  private row: number = 0;
-  private column: number = 0;
-  private line_begin: number = 0;
-  private line_buffer: string = "";
+  peek: string | undefined = undefined;
+  private row: number = 1;
+  private column = 0;
   private position: number = 0;
   private input: string;
 }

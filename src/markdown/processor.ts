@@ -1,5 +1,5 @@
 import { Block, BlockQuote, FencedCode, Heading, IndentedCode, Paragraph } from "./block";
-import { Node, NODETAG } from "./node";
+import { Node, NODE_TAG } from "./node";
 import { Scanner } from "./scanner";
 
 export interface Processor {
@@ -62,7 +62,7 @@ export class BlockQuoteProcessor implements Processor {
     }
 
     const bq = new BlockQuote();
-    return new Node(NODETAG.BlockQuote, bq, this);
+    return new Node(NODE_TAG.BlockQuote, bq, this);
   }
 
   match(_block: Block, scanner: Scanner): boolean {
@@ -136,7 +136,7 @@ export class HeadingProcessor implements Processor {
     const content = line.substring(i).trimEnd();
     const heading = new Heading(level, content);
     heading.close();
-    return new Node(NODETAG.Heading, heading, this);
+    return new Node(NODE_TAG.Heading, heading, this);
   }
 
   match(_block: Block, _scanner: Scanner): boolean {
@@ -160,7 +160,7 @@ export class IndentedCodeProcessor implements Processor {
     const line = scanner.peekline();
     const indented_code = new IndentedCode(' '.repeat(pandding) + line);
     scanner.consume(line.length);
-    return new Node(NODETAG.IndentedCode, indented_code, this);
+    return new Node(NODE_TAG.IndentedCode, indented_code, this);
   }
 
   match(block: Block, scanner: Scanner): boolean {
@@ -196,7 +196,7 @@ export class FencedCodeProcessor implements Processor {
     }
 
     const fc = new FencedCode(indent, result.length, result.bullet, result.language);
-    return new Node(NODETAG.FencedCode, fc, this);
+    return new Node(NODE_TAG.FencedCode, fc, this);
   }
 
   match(block: Block, scanner: Scanner): boolean {
@@ -299,7 +299,7 @@ export class HtmlBlockProcessor implements Processor {
 export class ParagraphProcessor implements Processor {
   open(scanner: Scanner): Node | null {
     const para = new Paragraph(scanner.peekline());
-    return new Node(NODETAG.Paragraph, para, this);
+    return new Node(NODE_TAG.Paragraph, para, this);
   }
 
   match(block: Block, scanner: Scanner): boolean {
