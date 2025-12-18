@@ -1,9 +1,4 @@
-type Location = {
-  row: number,
-  column: number,
-  start: number;
-  end: number;
-};
+import { Context } from "./context";
 
 export const NODE_TAG = {
   Document: 0,
@@ -43,7 +38,7 @@ export const NODE_TAG = {
 export type NodeTag = typeof NODE_TAG[keyof typeof NODE_TAG];
 
 export class Node {
-  constructor(public readonly tag: NodeTag, public readonly localtion?: Location, public readonly context?: Context) { }
+  constructor(public readonly tag: NodeTag, public readonly context?: Context) { }
 
   is(tag: NodeTag): boolean {
     return this.tag == tag;

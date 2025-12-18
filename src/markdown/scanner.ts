@@ -7,12 +7,20 @@ export class Scanner {
     this.input = input;
   }
 
+  is_eof(): boolean {
+    if(this.position >= this.input.length) {
+      return true;
+    }
+    return false;
+  }
+
   get_position(): number {
     return this.position - 1;
   }
 
   set_postion(pos: number): void {
     this.position = pos;
+    this.consume();
   }
 
   get_row(): number {
@@ -74,6 +82,7 @@ export class Scanner {
         this.consume_if('\n');
         break;
       } else if(this.peek == '\n') {
+        this.consume();
         break;
       } else {
         this.consume();
