@@ -8,7 +8,7 @@ export class Scanner {
   }
 
   is_eof(): boolean {
-    if(this.position >= this.input.length) {
+    if (this.position >= this.input.length) {
       return true;
     }
     return false;
@@ -31,6 +31,10 @@ export class Scanner {
     return this.column;
   }
 
+  get_content(start: number, end?: number): string {
+    return this.input.substring(start, end);
+  }
+
   skip_whitespace(): [number, boolean] {
     if (this.peek == undefined) {
       return [0, false];
@@ -45,13 +49,13 @@ export class Scanner {
         if (tab_size == 0) {
           tab_size = TAB_SIZE;
         }
-        this.consume()
       } else if (this.peek == '\t') {
         indent += tab_size;
         tab_size = TAB_SIZE;
       } else {
         break;
       }
+      this.consume()
     }
 
     return [indent, true];
@@ -79,18 +83,21 @@ export class Scanner {
     while (this.position < this.input.length) {
       if (this.peek == '\r') {
         this.consume();
-        this.consume_if('\n');
+        this.increment_row();
+        if (this.consume_if('\n')) {
+          this.column -= 1;
+        }
         break;
-      } else if(this.peek == '\n') {
+      } else if (this.peek == '\n') {
+        this.increment_row();
         this.consume();
         break;
       } else {
         this.consume();
       }
     }
-    this.increment_row();
   }
-
+  
   increment_row(): void {
     this.row += 1;
     this.column = 0;

@@ -1,38 +1,39 @@
 import { Context } from "./context";
 
 export const NODE_TAG = {
-  Document: 0,
+  Dummy: 0,
+  Document: 1,
 
   // ContainerBlock
-  ContainerBlockStart: 1,
-  List: 2,
-  ListItem: 3,
-  BlockQuote: 4,
-  ContainerBlockEnd: 5,
+  ContainerBlockStart: 2,
+  List: 3,
+  ListItem: 4,
+  BlockQuote: 5,
+  ContainerBlockEnd: 6,
 
   // LeafBlock 
-  LeafBlockStart: 6,
-  ThematicBreak: 7,
-  Heading: 8,
-  IndentedCode: 9,
-  FencedCode: 10,
-  HtmlBlock: 11,
-  LinkReferenceDefinition: 12,
-  Paragraph: 13,
-  LeafBlockEnd: 14,
+  LeafBlockStart: 7,
+  ThematicBreak: 8,
+  Heading: 9,
+  IndentedCode: 10,
+  FencedCode: 11,
+  HtmlBlock: 12,
+  LinkReferenceDefinition: 13,
+  Paragraph: 14,
+  LeafBlockEnd: 15,
 
   // inlines
-  InlineStart: 15,
-  Text: 16,
-  CodeSpan: 17,
-  Emphasis: 18,
-  Link: 19,
-  Image: 20,
-  AutoLink: 21,
-  RawHtml: 22,
-  HardBreak: 23,
-  SoftwareBreak: 24,
-  InlineEnd: 25,
+  InlineStart: 16,
+  Text: 17,
+  CodeSpan: 18,
+  Emphasis: 19,
+  Link: 20,
+  Image: 21,
+  AutoLink: 22,
+  RawHtml: 23,
+  HardBreak: 24,
+  SoftwareBreak: 25,
+  InlineEnd: 26,
 } as const;
 
 export type NodeTag = typeof NODE_TAG[keyof typeof NODE_TAG];

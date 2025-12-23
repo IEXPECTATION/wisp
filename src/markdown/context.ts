@@ -1,59 +1,62 @@
-export type Context = OrderedListContext | UnorderedListContext | ListItemContext | HeadingContext | IndentedCodeContext | FencedCodeContext | HtmlBlockContext | LinkReferenceDefinitionContext;
+export type Context = OrderedListContext | UnorderedListContext | ListItemContext | BlockQuoteContext | ThematicBreakContext | HeadingContext | IndentedCodeContext | FencedCodeContext | HtmlBlockContext | LinkReferenceDefinitionContext | ParagraphContext;
 
-type Location = {
+export type Location = {
   row: number,
   column: number,
   start: number;
   end: number;
 };
 
-type OrderedListContext = {
+export type OrderedListContext = {
   location: Location,
   sn: number,
-  offset: number,
-}
-
-type UnorderedListContext = {
-  location: Location;
-  bullet: number,
-  offset: number,
-}
-
-type ListItemContext = {
-  location: Location,
   tiny: boolean,
 }
 
-type BlockQuoteContext = {
+export type UnorderedListContext = {
+  location: Location;
+  bullet: number,
+  tiny: boolean,
+}
+
+export type ListItemContext = {
+  offset: number,
+}
+
+export type BlockQuoteContext = {
   location: Location,
 }
 
-type ThematicBreakContext = {
+export type ThematicBreakContext = {
   location: Location,
 }
 
-type HeadingContext = {
+export type HeadingContext = {
   location: Location,
   level: number,
 }
 
-type IndentedCodeContext = {
-  location: Location[],
-  padding: number,
+export type IndentedCodeContext = {
+  lines: { location: Location, padding: number }[]
 }
 
-type FencedCodeContext = {
-  location: Location[],
+export type FencedCodeContext = {
+  lines: { location: Location, padding: number }[],
   bullet: string,
   length: number,
   offset: number,
+  language: Location,
 }
 
-type HtmlBlockContext = {
+export type HtmlBlockContext = {
   location: Location,
   tab_name: string,
 }
 
-type LinkReferenceDefinitionContext = {
-  
+export type LinkReferenceDefinitionContext = {
+  location: Location,
+}
+
+export type ParagraphContext = {
+  locations: Location[],
 }
