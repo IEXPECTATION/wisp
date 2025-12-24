@@ -112,12 +112,12 @@ test("blockquote test II", () => {
   }
 });
 
-test.only("blockquote test III", () => {
+test("blockquote test III", () => {
   const input = "> abc\n>> def\n> igh\n>>> jkl";
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
   const root = p.parse();
-  console.dir(root, {depth: Infinity});
+  // console.dir(root, {depth: Infinity});
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
     check_node_dfs(root,
@@ -174,12 +174,12 @@ test("indented test III", () => {
   }
 });
 
-test("Fenced code I", () => {
+test("fenced code test I", () => {
   const input = "```\nfenced code I\n```";
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
   const root = p.parse();
-  console.dir(root, { depth: Infinity });
+  // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
     check_node_dfs(root,
@@ -187,3 +187,20 @@ test("Fenced code I", () => {
       { "tag": NODE_TAG.FencedCode, "depth": 1 }]);
   }
 });
+
+test.only("fenced code test II", () => {
+  const input = "> ```\n> abc\n```";
+  const scanner = new Scanner(input);
+  const p = new Parser(scanner);
+  const root = p.parse();
+  console.dir(root, { depth: Infinity });
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.BlockQuote, "depth": 1 },
+      { "tag": NODE_TAG.FencedCode, "depth": 2 },
+      { "tag": NODE_TAG.FencedCode, "depth": 1 },
+    ]);
+  }
+})

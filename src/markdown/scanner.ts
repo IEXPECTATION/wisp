@@ -2,6 +2,12 @@ export const ArriveEndOfInput = new Error("Arrive the end of input string.");
 
 export const TAB_SIZE = 4;
 
+export type Anchor = {
+  position: number;
+  row: number;
+  column: number;
+}
+
 export class Scanner {
   constructor(input: string) {
     this.input = input;
@@ -21,6 +27,20 @@ export class Scanner {
   set_postion(pos: number): void {
     this.position = pos;
     this.consume();
+  }
+
+  get_anchor(): Anchor {
+    return {
+      position: this.get_position(),
+      row: this.row,
+      column: this.column,
+    }
+  }
+
+  set_anchor(a: Anchor): void {
+    this.set_postion(a.position);
+    this.row = a.row;
+    this.column = a.column;
   }
 
   get_row(): number {

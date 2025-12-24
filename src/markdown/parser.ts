@@ -32,6 +32,11 @@ export class Parser {
         }
 
         // Push this node to our cache.
+        if (this.is_continuation_paragraph() && node.is_not(NODE_TAG.Paragraph)) {
+          // We expect a dummy node when we is on continuation paragraph mode.
+          // If we don't get a dummy node, we should pop the last paragraph node.
+          this.cached_nodes.pop();
+        }
         this.cached_nodes.push(node);
         if (node.is_left_block()) {
           // If we open a new leaf block, It means the current line has been parsed.
@@ -74,7 +79,9 @@ export class Parser {
               }
               break;
             case NODE_TAG.FencedCode:
-
+              if (!this.continue_fencedcode(this.cached_nodes[index])) {
+                matched = false;
+              }
               break;
             case NODE_TAG.HtmlBlock:
               break;
@@ -90,26 +97,44 @@ export class Parser {
           index += 1;
         }
 
-        const node = this.cached_nodes[index - 1];
-        if (index == this.cached_nodes.length && node.is_left_block() && !node.is(NODE_TAG.Paragraph)) {
+        if (index == this.cached_nodes.length && this.cached_nodes[index - 1].is_left_block() && !this.cached_nodes[index - 1].is(NODE_TAG.Paragraph)) {
           // multiple line leaf block, like indented code and fenced code
           continue;
         }
 
         // close all blocks from index to the last one.
         const is_continuation_paragraph = this.is_continuation_paragraph();
-        if (!is_continuation_paragraph) {
-          this.clear_cached_blocks(index, this.cached_nodes.length);
-        }
+        if (is_continuation_paragraph) {
+          let cur_parent = root;
+          if (index != 0) {
+            cur_parent = this.cached_nodes[index - 1];
+          }
 
-        if (index == 0 && !matched) {
-          parent = root;
+          const node = this.try_open_block(cur_parent);
+          if (node == null) {
+            return null;
+          }
+
+          // If we don't get the a dummy node, It means we have a new block.
+          if (node.is_not(NODE_TAG.Dummy)) {
+            this.clear_cached_blocks(index, this.cached_nodes.length);
+            this.cached_nodes.push(node);
+
+            // If we get a container block, we must exit to read lines and try to open new block.
+            if (node.is_container_block()) {
+              cur_parent = node;
+              parent = cur_parent;
+              break;
+            }
+          }
         } else {
-          if (!is_continuation_paragraph) {
+          this.clear_cached_blocks(index, this.cached_nodes.length);
+          parent = root;
+          if (index != 0) {
             parent = this.cached_nodes[index - 1];
           }
+          break;
         }
-        break;
       }
     }
   }
@@ -227,6 +252,7 @@ export class Parser {
   }
 
   private parse_thematicbreak(parent: Node): Node | null {
+    const anchor = this.scanner.get_anchor();
     const start = this.scanner.get_position();
     const row = this.scanner.get_row();
     const column = this.scanner.get_column();
@@ -240,8 +266,7 @@ export class Parser {
     }
 
     if (length < 3) {
-      // Back to the start.
-      this.scanner.set_postion(start);
+      this.scanner.set_anchor(anchor);
       return null;
     }
     const end = this.scanner.get_position();
@@ -252,7 +277,7 @@ export class Parser {
   }
 
   private parse_heading(parent: Node): Node | null {
-    const origin = this.scanner.get_position();
+    const anchor = this.scanner.get_anchor();
     let level = 1;
     this.scanner.consume();
     while (this.scanner.consume_if('#')) {
@@ -260,7 +285,7 @@ export class Parser {
     }
 
     if (level > 6 || this.scanner.peek != ' ') {
-      this.scanner.set_postion(origin);
+      this.scanner.set_anchor(anchor);
       return null;
     }
     this.scanner.consume();
@@ -288,23 +313,21 @@ export class Parser {
   }
 
   private parse_fencedcode(parent: Node, offset: number): Node | null {
-    const origin = this.scanner.get_position();
+    const anchor = this.scanner.get_anchor();
     const bullet = this.scanner.peek;
     let length = 1;
+    this.scanner.consume();
     while (this.scanner.consume_if(bullet!)) {
       length += 1
     }
 
     if (length < 3) {
-      this.scanner.set_postion(origin);
+      this.scanner.set_anchor(anchor);
       return null;
     }
 
-    const [_, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      this.scanner.set_postion(origin);
-      return null;
-    }
+    // Skip the white spaces.
+    this.scanner.skip_whitespace();
 
     const language_row = this.scanner.get_row();
     const language_column = this.scanner.get_column();
@@ -312,7 +335,7 @@ export class Parser {
     this.scanner.consume_line();
     const language_end = this.scanner.get_position();
 
-    const fcode = new Node(NODE_TAG.FencedCode, { locations: [], bullet: bullet!, length, offset, language: { row: language_row, column: language_column, start: language_start, end: language_end } })
+    const fcode = new Node(NODE_TAG.FencedCode, { lines: [], bullet: bullet!, length, offset, language: { row: language_row, column: language_column, start: language_start, end: language_end } })
     parent.push_node(fcode);
     return fcode;
   }
@@ -346,15 +369,14 @@ export class Parser {
   }
 
   private continue_blockquote(): boolean {
-    const origin = this.scanner.get_position();
+    const anchor = this.scanner.get_anchor();
     const [indent, ok] = this.scanner.skip_whitespace();
     if (!ok) {
-      this.scanner.set_postion(origin);
       return false;
     }
 
     if (indent > 3) {
-      this.scanner.set_postion(origin);
+      this.scanner.set_anchor(anchor);
       return false;
     }
 
@@ -365,15 +387,14 @@ export class Parser {
   }
 
   private cotninue_indentedcode(self: Node): boolean {
-    const origin = this.scanner.get_position();
+    const anchor = this.scanner.get_anchor();
     const [indent, ok] = this.scanner.skip_whitespace();
     if (!ok) {
-      this.scanner.set_postion(origin);
       return false;
     }
 
     if (indent < TAB_SIZE) {
-      this.scanner.set_postion(origin);
+      this.scanner.set_anchor(anchor);
       return false;
     }
 
@@ -393,10 +414,8 @@ export class Parser {
   }
 
   private continue_fencedcode(self: Node): boolean {
-    const origin = this.scanner.get_position();
     const [indent, ok] = this.scanner.skip_whitespace();
     if (!ok) {
-      this.scanner.set_postion(origin);
       return false;
     }
 
@@ -464,23 +483,22 @@ export class Parser {
   }
 
   private is_blank_line(): boolean {
-    const start = this.scanner.get_position();
-    // this.scanner.consume_line();
-    const end = this.scanner.get_position();
-    const line = this.scanner.get_content(start, end);
-    for (let c of line) {
-      if (c != ' ' && c != '\t' && c != "\r" && c != '\n') {
-        this.scanner.set_postion(start);
+    const anchor = this.scanner.get_anchor();
+    while (this.scanner.peek != '\r' && this.scanner.peek != '\n') {
+      if (this.scanner.peek != ' ' && this.scanner.peek != '\t') {
+        this.scanner.set_anchor(anchor);
         return false;
       }
     }
+    this.scanner.consume_if('\n');
     return true;
   }
 
   private cached_nodes: Node[] = [];
 }
 
-const s = new Scanner("> abc\n>> def\n> igh\n>>> jkl");
-const p = new Parser(s);
-const bs = p.parse();
-console.dir(bs, {depth: Infinity});
+const input = "> ```\n> abc\n```";
+const scanner = new Scanner(input);
+const p = new Parser(scanner);
+const root = p.parse();
+console.dir(root, { depth: Infinity });
