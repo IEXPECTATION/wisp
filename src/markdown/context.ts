@@ -32,7 +32,7 @@ export type ThematicBreakContext = {
 }
 
 export type HeadingContext = {
-  location: Location,
+  locations: Location[],
   level: number,
 }
 

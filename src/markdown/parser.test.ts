@@ -188,12 +188,12 @@ test("fenced code test I", () => {
   }
 });
 
-test.only("fenced code test II", () => {
+test("fenced code test II", () => {
   const input = "> ```\n> abc\n```";
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
   const root = p.parse();
-  console.dir(root, { depth: Infinity });
+  // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
     check_node_dfs(root, [
@@ -203,4 +203,49 @@ test.only("fenced code test II", () => {
       { "tag": NODE_TAG.FencedCode, "depth": 1 },
     ]);
   }
-})
+});
+
+test("setext heading test I", () => {
+  const input = "heading\n===";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, { depth: Infinity });
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Heading, "depth": 1 },
+    ]);
+  }
+});
+
+test("setext heading test II", () => {
+  const input = "heading\n---";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, { depth: Infinity });
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Heading, "depth": 1 },
+    ]);
+  }
+});
+
+test("setext heading test III", () => {
+  const input = "heading\n=--";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, { depth: Infinity });
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 },
+    ]);
+  }
+});
