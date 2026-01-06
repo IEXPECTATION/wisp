@@ -1,4 +1,4 @@
-import { BlockQuoteContext, FencedCodeContext, HeadingContext, IndentedCodeContext, ParagraphContext, ThematicBreakContext } from "./context";
+import { BlockQuoteContext, FencedCodeContext, HeadingContext, IndentedCodeContext, ParagraphContext, ThematicBreakContext, UnorderedListContext } from "./context";
 import { Node, NODE_TAG } from "./node";
 import { Scanner, TAB_SIZE } from "./scanner";
 
@@ -64,7 +64,9 @@ export class Parser {
         let matched = true;
         while (index < this.cached_nodes.length) {
           switch (this.cached_nodes[index].tag) {
-            case NODE_TAG.List:
+            case NODE_TAG.OrderedList:
+              break;
+            case NODE_TAG.UnorderedList:
               break;
             case NODE_TAG.ListItem:
               break;
@@ -158,7 +160,7 @@ export class Parser {
     switch (this.scanner.peek) {
       case '*':
       case '-': {
-        // unordered list or thematic break
+        // thematic break or unordered list
         if (!is_continuation_paragraph) {
           let node = this.parse_thematicbreak(parent);
           if (node != null) {
@@ -210,6 +212,10 @@ export class Parser {
       case '8':
       case '9': {
         // ordered list
+        if(is_continuation_paragraph && scanner.peek == '1') {
+          break;
+        }
+        return this.parse_orderedlist(parent);
       }
       default:
         // We check whether this line is blank line here.
@@ -218,6 +224,13 @@ export class Parser {
           this.cached_nodes.pop();
           return DummyBlock;
         }
+
+        // If the parent is unordered list or ordered list, we should create a list item node.
+        if(parent.tag == NODE_TAG.UnorderedList || parent.tag == NODE_TAG.OrderedList) {
+          const li = new Node(NODE_TAG.ListItem);
+          parent.push_node(li);
+          return li;
+        }
         break;
     }
 
@@ -225,7 +238,7 @@ export class Parser {
     if (is_continuation_paragraph) {
       // parse this line whether is setext heading.
       const last_node = this.cached_nodes[this.cached_nodes.length - 1];
-      if (!this.parse_setext_heading(parent, last_node)) {
+      if (!this.parse_setext_heading(last_node)) {
         this.continue_paragraph(this.cached_nodes[this.cached_nodes.length - 1]);
       }
       return DummyBlock;
@@ -249,7 +262,9 @@ export class Parser {
     }
 
     offset += indent;
-    return null;
+    const ul = new Node(NODE_TAG.UnorderedList, {} as UnorderedListContext);
+    parent.push_node(ul);
+    return ul;
   }
 
   private parse_orderedlist(parent: Node): Node | null {
@@ -318,7 +333,7 @@ export class Parser {
     return h;
   }
 
-  private parse_setext_heading(parent: Node, paragraph: Node): boolean {
+  private parse_setext_heading(paragraph: Node): boolean {
     console.assert(paragraph.is(NODE_TAG.Paragraph), "The node is not a paragraph node.");
     const anchor = this.scanner.get_anchor();
     const [_, ok] = this.scanner.skip_whitespace();

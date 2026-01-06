@@ -27,11 +27,12 @@ test("paragraph test I", () => {
   // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
       { "tag": NODE_TAG.Paragraph, "depth": 2 },
-      { "tag": NODE_TAG.Paragraph, "depth": 2 }]);
+      { "tag": NODE_TAG.Paragraph, "depth": 2 }
+    ]);
   }
 });
 
@@ -43,10 +44,11 @@ test("paragraph test II", () => {
   // console.dir(root, {depth: Infinity});
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
-      { "tag": NODE_TAG.Paragraph, "depth": 2 }]);
+      { "tag": NODE_TAG.Paragraph, "depth": 2 }
+    ]);
   }
 });
 
@@ -58,7 +60,10 @@ test("paragraph test III", () => {
   // console.dir(root, {depth: Infinity});
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root, [{ "tag": NODE_TAG.Document, "depth": 0 }, { "tag": NODE_TAG.Paragraph, "depth": 1 }]);
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 }
+    ]);
   }
 });
 
@@ -70,11 +75,12 @@ test("paragraph test IV", () => {
   // console.dir(root, {depth: Infinity});
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
       { "tag": NODE_TAG.Paragraph, "depth": 2 },
-      { "tag": NODE_TAG.Heading, "depth": 1 }]);
+      { "tag": NODE_TAG.Heading, "depth": 1 }
+    ]);
   }
 });
 
@@ -86,12 +92,13 @@ test("blockquote test I", () => {
   // console.dir(root, {depth: Infinity});
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
       { "tag": NODE_TAG.Paragraph, "depth": 2 },
       { "tag": NODE_TAG.BlockQuote, "depth": 2 },
-      { "tag": NODE_TAG.Paragraph, "depth": 3 }]);
+      { "tag": NODE_TAG.Paragraph, "depth": 3 }
+    ]);
   }
 });
 
@@ -103,12 +110,13 @@ test("blockquote test II", () => {
   // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
       { "tag": NODE_TAG.Paragraph, "depth": 2 },
       { "tag": NODE_TAG.BlockQuote, "depth": 2 },
-      { "tag": NODE_TAG.Paragraph, "depth": 3 }]);
+      { "tag": NODE_TAG.Paragraph, "depth": 3 }
+    ]);
   }
 });
 
@@ -120,14 +128,15 @@ test("blockquote test III", () => {
   // console.dir(root, {depth: Infinity});
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
       { "tag": NODE_TAG.Paragraph, "depth": 2 },
       { "tag": NODE_TAG.BlockQuote, "depth": 2 },
       { "tag": NODE_TAG.Paragraph, "depth": 3 },
       { "tag": NODE_TAG.BlockQuote, "depth": 3 },
-      { "tag": NODE_TAG.Paragraph, "depth": 4 }]);
+      { "tag": NODE_TAG.Paragraph, "depth": 4 }
+    ]);
   }
 });
 
@@ -139,9 +148,10 @@ test("indented test I", () => {
   // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
-      { "tag": NODE_TAG.IndentedCode, "depth": 1 }]);
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.IndentedCode, "depth": 1 }
+    ]);
   }
 });
 
@@ -153,9 +163,10 @@ test("indented test II", () => {
   // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
-      { "tag": NODE_TAG.IndentedCode, "depth": 1 }]);
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.IndentedCode, "depth": 1 }
+    ]);
   }
 });
 
@@ -167,10 +178,11 @@ test("indented test III", () => {
   // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.Heading, "depth": 1 },
-      { "tag": NODE_TAG.IndentedCode, "depth": 1 }]);
+      { "tag": NODE_TAG.IndentedCode, "depth": 1 }
+    ]);
   }
 });
 
@@ -182,9 +194,10 @@ test("fenced code test I", () => {
   // console.dir(root, { depth: Infinity });
   expect(root instanceof Node).toEqual(true);
   if (root instanceof Node) {
-    check_node_dfs(root,
-      [{ "tag": NODE_TAG.Document, "depth": 0 },
-      { "tag": NODE_TAG.FencedCode, "depth": 1 }]);
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.FencedCode, "depth": 1 }
+    ]);
   }
 });
 
@@ -200,7 +213,22 @@ test("fenced code test II", () => {
       { "tag": NODE_TAG.Document, "depth": 0 },
       { "tag": NODE_TAG.BlockQuote, "depth": 1 },
       { "tag": NODE_TAG.FencedCode, "depth": 2 },
-      { "tag": NODE_TAG.FencedCode, "depth": 1 },
+      { "tag": NODE_TAG.FencedCode, "depth": 1 }
+    ]);
+  }
+});
+
+test("fenced code test III", () => {
+  const input = "~~~\n> abc\n~~~";
+  const scanner = new Scanner(input);
+  const p = new Parser(scanner);
+  const root = p.parse();
+  // console.dir(root, { depth: Infinity });
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.FencedCode, "depth": 1 }
     ]);
   }
 });
@@ -215,7 +243,7 @@ test("setext heading test I", () => {
   if (root instanceof Node) {
     check_node_dfs(root, [
       { "tag": NODE_TAG.Document, "depth": 0 },
-      { "tag": NODE_TAG.Heading, "depth": 1 },
+      { "tag": NODE_TAG.Heading, "depth": 1 }
     ]);
   }
 });
@@ -230,7 +258,7 @@ test("setext heading test II", () => {
   if (root instanceof Node) {
     check_node_dfs(root, [
       { "tag": NODE_TAG.Document, "depth": 0 },
-      { "tag": NODE_TAG.Heading, "depth": 1 },
+      { "tag": NODE_TAG.Heading, "depth": 1 }
     ]);
   }
 });
@@ -245,7 +273,7 @@ test("setext heading test III", () => {
   if (root instanceof Node) {
     check_node_dfs(root, [
       { "tag": NODE_TAG.Document, "depth": 0 },
-      { "tag": NODE_TAG.Paragraph, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 }
     ]);
   }
 });
