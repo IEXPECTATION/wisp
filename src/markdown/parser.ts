@@ -170,7 +170,7 @@ export class Parser {
 
         let node = this.parse_unorderedlist(parent, indent);
         if (node != null) {
-          return null;
+          return node;
         }
 
         if(is_continuation_paragraph) {
@@ -198,9 +198,6 @@ export class Parser {
       case '<':
         // html block
         break;
-      case '=':
-        // setext heading
-        break;
       case '0':
       case '1':
       case '2':
@@ -212,7 +209,7 @@ export class Parser {
       case '8':
       case '9': {
         // ordered list
-        if(is_continuation_paragraph && scanner.peek == '1') {
+        if(is_continuation_paragraph && this.scanner.peek != '1') {
           break;
         }
         return this.parse_orderedlist(parent);
@@ -236,10 +233,10 @@ export class Parser {
 
     // fallback to paragraph
     if (is_continuation_paragraph) {
-      // parse this line whether is setext heading.
+      // Parse this line whether is setext heading.
       const last_node = this.cached_nodes[this.cached_nodes.length - 1];
       if (!this.parse_setext_heading(last_node)) {
-        this.continue_paragraph(this.cached_nodes[this.cached_nodes.length - 1]);
+        this.continue_paragraph(last_node);
       }
       return DummyBlock;
     } else {
@@ -257,6 +254,11 @@ export class Parser {
 
     const [indent, ok] = this.scanner.skip_whitespace();
     if (!ok) {
+      this.scanner.set_anchor(anchor);
+      return null;
+    }
+
+    if(indent == 0) {
       this.scanner.set_anchor(anchor);
       return null;
     }
@@ -336,10 +338,10 @@ export class Parser {
   private parse_setext_heading(paragraph: Node): boolean {
     console.assert(paragraph.is(NODE_TAG.Paragraph), "The node is not a paragraph node.");
     const anchor = this.scanner.get_anchor();
-    const [_, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      return false;
-    }
+    // const [_, ok] = this.scanner.skip_whitespace();
+    // if (!ok) {
+    //   return false;
+    // }
 
     const bullet = this.scanner.peek;
     if (bullet != '=' && bullet != '-') {
@@ -580,8 +582,4 @@ export class Parser {
 
   private cached_nodes: Node[] = [];
 }
-const input = "heading\n---";
-const scanner = new Scanner(input);
-const parser = new Parser(scanner);
-const root = parser.parse();
 
