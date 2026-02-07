@@ -1,3 +1,5 @@
+import { Node } from "./node"
+
 export type Context = OrderedListContext | UnorderedListContext | ListItemContext | BlockQuoteContext | ThematicBreakContext | HeadingContext | IndentedCodeContext | FencedCodeContext | HtmlBlockContext | LinkReferenceDefinitionContext | ParagraphContext;
 
 export type Location = {
@@ -15,12 +17,13 @@ export type OrderedListContext = {
 
 export type UnorderedListContext = {
   location: Location;
-  bullet: number,
+  bullet: string,
+  offset: number,
   tiny: boolean,
 }
 
 export type ListItemContext = {
-  offset: number,
+  parent: Node,
 }
 
 export type BlockQuoteContext = {

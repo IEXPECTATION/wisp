@@ -1,8 +1,16 @@
-import { BlockQuoteContext, FencedCodeContext, HeadingContext, IndentedCodeContext, ParagraphContext, ThematicBreakContext, UnorderedListContext } from "./context";
+import { BlockQuoteContext, FencedCodeContext, HeadingContext, IndentedCodeContext, ListItemContext, ParagraphContext, ThematicBreakContext, UnorderedListContext } from "./context";
 import { Node, NODE_TAG } from "./node";
 import { Scanner, TAB_SIZE } from "./scanner";
 
 const DummyBlock = new Node(NODE_TAG.Dummy);
+
+const LISTMATCHINGRESULT = {
+  NotMatched: 0,
+  Matched: 1,
+  BlankLine: 2,
+  NewListItem: 3,
+} as const;
+type ListMatchingResult = typeof LISTMATCHINGRESULT[keyof typeof LISTMATCHINGRESULT];
 
 export class Parser {
   constructor(private readonly scanner: Scanner) { scanner.consume(); }
@@ -32,11 +40,6 @@ export class Parser {
         }
 
         // Push this node to our cache.
-        if (this.is_continuation_paragraph() && node.is_not(NODE_TAG.Paragraph)) {
-          // We expect a dummy node when we is on continuation paragraph mode.
-          // If we don't get a dummy node, we should pop the last paragraph node.
-          this.cached_nodes.pop();
-        }
         this.cached_nodes.push(node);
         if (node.is_left_block()) {
           // If we open a new leaf block, It means the current line has been parsed.
@@ -63,12 +66,22 @@ export class Parser {
         let index = 0;
         let matched = true;
         while (index < this.cached_nodes.length) {
-          switch (this.cached_nodes[index].tag) {
+          const cached_node = this.cached_nodes[index];
+          switch (cached_node.tag) {
             case NODE_TAG.OrderedList:
+              if (!this.continue_orderedlist()) {
+                matched = false
+              }
               break;
             case NODE_TAG.UnorderedList:
+              if (!this.continue_unorderedlist(cached_node)) {
+                matched = false;
+              }
               break;
             case NODE_TAG.ListItem:
+              if (!this.continue_listitem(cached_node)) {
+                matched = false;
+              }
               break;
             case NODE_TAG.BlockQuote:
               if (!this.continue_blockquote()) {
@@ -76,12 +89,12 @@ export class Parser {
               }
               break;
             case NODE_TAG.IndentedCode:
-              if (!this.cotninue_indentedcode(this.cached_nodes[index])) {
+              if (!this.cotninue_indentedcode(cached_node)) {
                 matched = false;
               }
               break;
             case NODE_TAG.FencedCode:
-              if (!this.continue_fencedcode(this.cached_nodes[index])) {
+              if (!this.continue_fencedcode(cached_node)) {
                 matched = false;
               }
               break;
@@ -100,7 +113,7 @@ export class Parser {
         }
 
         if (index == this.cached_nodes.length && this.cached_nodes[index - 1].is_left_block() && !this.cached_nodes[index - 1].is(NODE_TAG.Paragraph)) {
-          // multiple line leaf block, like indented code and fenced code
+          // multiple lines leaf block, like indented code and fenced code
           continue;
         }
 
@@ -173,7 +186,7 @@ export class Parser {
           return node;
         }
 
-        if(is_continuation_paragraph) {
+        if (is_continuation_paragraph) {
           // maybe a setext heading
           break;
         }
@@ -209,7 +222,7 @@ export class Parser {
       case '8':
       case '9': {
         // ordered list
-        if(is_continuation_paragraph && this.scanner.peek != '1') {
+        if (is_continuation_paragraph && this.scanner.peek != '1') {
           break;
         }
         return this.parse_orderedlist(parent);
@@ -223,8 +236,8 @@ export class Parser {
         }
 
         // If the parent is unordered list or ordered list, we should create a list item node.
-        if(parent.tag == NODE_TAG.UnorderedList || parent.tag == NODE_TAG.OrderedList) {
-          const li = new Node(NODE_TAG.ListItem);
+        if (parent.tag == NODE_TAG.UnorderedList || parent.tag == NODE_TAG.OrderedList) {
+          const li = new Node(NODE_TAG.ListItem, { parent } as ListItemContext);
           parent.push_node(li);
           return li;
         }
@@ -248,6 +261,9 @@ export class Parser {
 
   private parse_unorderedlist(parent: Node, offset: number): Node | null {
     const anchor = this.scanner.get_anchor();
+    const start = this.scanner.get_position();
+    const row = this.scanner.get_row();
+    const column = this.scanner.get_column();
     const bullet = this.scanner.peek;
     offset += 1;
     this.scanner.consume();
@@ -258,13 +274,14 @@ export class Parser {
       return null;
     }
 
-    if(indent == 0) {
+    if (indent == 0) {
       this.scanner.set_anchor(anchor);
       return null;
     }
 
+    const end = this.scanner.get_position();
     offset += indent;
-    const ul = new Node(NODE_TAG.UnorderedList, {} as UnorderedListContext);
+    const ul = new Node(NODE_TAG.UnorderedList, { location: { row, column, start, end }, bullet, offset, tiny: false } as UnorderedListContext);
     parent.push_node(ul);
     return ul;
   }
@@ -443,15 +460,55 @@ export class Parser {
     return p;
   }
 
-  private continue_orderedlist(): boolean {
-    return false;
+  private continue_orderedlist(): ListMatchingResult {
+    return LISTMATCHINGRESULT.NotMatched;
   }
 
-  private continue_unorderedlist(): boolean {
-    return false;
+  private continue_unorderedlist(self: Node): ListMatchingResult {
+    const anchor = this.scanner.get_anchor();
+    this.list_item_indent = 0;
+
+    // Check whether current line is a blank line.
+    const is = this.is_blank_line();
+    if (is) {
+      (self.context as UnorderedListContext).tiny = false;
+      return LISTMATCHINGRESULT.BlankLine;
+    }
+
+    // Check whether current line is a contination paragraph.
+    // TODO:
+    let is_continuation_paragraph = false;
+    if(this.cached_nodes.length) {
+      is_continuation_paragraph = (this.cached_nodes[this.cached_nodes.length - 1].tag == NODE_TAG.Paragraph);
+    }
+
+    if(is_continuation_paragraph) {
+      
+    }
+
+    // Check whether current line is a new list item?
+    if (this.scanner.consume_if((self.context as UnorderedListContext).bullet)) {
+      return LISTMATCHINGRESULT.NewListItem;
+    }
+
+    // Check whether current line is a list item.
+    const [indent, ok] = this.scanner.skip_whitespace();
+    if (!ok) {
+      return LISTMATCHINGRESULT.NotMatched;
+    }
+
+    const offset = (self.context as UnorderedListContext).offset;
+    if (indent > offset) {
+      this.list_item_indent = indent - offset;
+      return LISTMATCHINGRESULT.Matched;
+    }
+
+    this.scanner.set_anchor(anchor);
+    return LISTMATCHINGRESULT.NotMatched;
   }
 
   private continue_listitem(self: Node): boolean {
+
     return false;
   }
 
@@ -580,6 +637,7 @@ export class Parser {
     return true;
   }
 
+  private list_item_indent: number = 0;
   private cached_nodes: Node[] = [];
 }
 

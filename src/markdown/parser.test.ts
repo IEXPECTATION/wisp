@@ -84,6 +84,23 @@ test("paragraph test IV", () => {
   }
 });
 
+test("paragraph test V", () => {
+  const input = "> pargraph I\n~~~\nfrence code\n~~~";
+  const scanner = new Scanner(input);
+  const p = new Parser(scanner);
+  const root = p.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.BlockQuote, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 2 },
+      { "tag": NODE_TAG.FencedCode, "depth": 1 }
+    ]);
+  }
+});
+
 test("blockquote test I", () => {
   const input = "> abc\n>> def\n";
   const scanner = new Scanner(input);
@@ -277,3 +294,64 @@ test("setext heading test III", () => {
     ]);
   }
 });
+
+test("unordered list test I", () => {
+  const input = "- list I";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.UnorderedList, "depth": 1 },
+      { "tag": NODE_TAG.ListItem, "depth": 2 },
+      { "tag": NODE_TAG.Paragraph, "depth": 3 },
+    ])
+  }
+});
+
+test("unordered list test II", () => {
+  const input = "- list I\n- list II";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.UnorderedList, "depth": 1 },
+      { "tag": NODE_TAG.ListItem, "depth": 2 },
+      { "tag": NODE_TAG.Paragraph, "depth": 3 },
+      { "tag": NODE_TAG.ListItem, "depth": 2 },
+      { "tag": NODE_TAG.Paragraph, "depth": 3 },
+    ])
+  }
+});
+
+test("unordered list test III", () => {
+  const input = "- list\n   \n  asdas"
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.UnorderedList, "depth": 1 },
+      { "tag": NODE_TAG.ListItem, "depth": 2 },
+      { "tag": NODE_TAG.Paragraph, "depth": 3 },
+    ])
+  }
+
+
+
+
+
+
+
+
+})
