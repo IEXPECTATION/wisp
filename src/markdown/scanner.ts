@@ -87,40 +87,33 @@ export class Scanner {
     } else {
       this.peek = this.input[this.position];
       this.position += 1;
-      this.column += 1;
+      if (this.peek == '\n') {
+        this.row += 1;
+        this.column = 1;
+      } else if (this.peek == '\r') {
+        this.consume_if('\n');
+        this.row += 1;
+        this.column += 1;
+      }
     }
   }
 
+
   consume_if(c: string): boolean {
     if (this.peek == c) {
-      this.consume()
+      this.peek = this.input[this.position];
+      this.position += 1;
       return true;
     }
     return false;
   }
 
   consume_line(): void {
-    while (this.position < this.input.length) {
-      if (this.peek == '\r') {
-        this.consume();
-        this.increment_row();
-        if (this.consume_if('\n')) {
-          this.column -= 1;
-        }
-        break;
-      } else if (this.peek == '\n') {
-        this.increment_row();
-        this.consume();
-        break;
-      } else {
-        this.consume();
-      }
+    const r = this.row;
+    while (this.peek != undefined && r == this.row) {
+      this.consume();
     }
-  }
-  
-  increment_row(): void {
-    this.row += 1;
-    this.column = 0;
+    this.consume_if("\n");
   }
 
   peek: string | undefined = undefined;

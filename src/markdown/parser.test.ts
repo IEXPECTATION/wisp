@@ -157,7 +157,7 @@ test("blockquote test III", () => {
   }
 });
 
-test("indented test I", () => {
+test("indented code test I", () => {
   const input = "    indent code";
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
@@ -172,7 +172,7 @@ test("indented test I", () => {
   }
 });
 
-test("indented test II", () => {
+test("indented code test II", () => {
   const input = "    indented code I\n      indented code II";
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
@@ -187,7 +187,7 @@ test("indented test II", () => {
   }
 });
 
-test("indented test III", () => {
+test("indented code test III", () => {
   const input = "# Heading\n      indented code II";
   const scanner = new Scanner(input);
   const p = new Parser(scanner);
