@@ -6,6 +6,7 @@ export type Anchor = {
   position: number;
   row: number;
   column: number;
+  whitespace: number;
 }
 
 export class Scanner {
@@ -14,10 +15,7 @@ export class Scanner {
   }
 
   is_eof(): boolean {
-    if (this.position >= this.input.length) {
-      return true;
-    }
-    return false;
+    return this.peek == undefined;
   }
 
   get_position(): number {
@@ -34,6 +32,7 @@ export class Scanner {
       position: this.get_position(),
       row: this.row,
       column: this.column,
+      whitespace: this.indent,
     }
   }
 
@@ -41,6 +40,7 @@ export class Scanner {
     this.set_postion(a.position);
     this.row = a.row;
     this.column = a.column;
+    this.indent = a.whitespace;
   }
 
   get_row(): number {
@@ -55,30 +55,33 @@ export class Scanner {
     return this.input.substring(start, end);
   }
 
-  skip_whitespace(): [number, boolean] {
-    if (this.peek == undefined) {
-      return [0, false];
-    }
-
+  skip_whitespace(): void {
     let indent = 0;
     let tab_size = TAB_SIZE;
-    while (true) {
-      if (this.peek == ' ') {
+    while(!this.is_eof()) {
+      if(this.peek == ' ') {
         indent += 1;
         tab_size -= 1;
-        if (tab_size == 0) {
+        if(tab_size == 0) {
           tab_size = TAB_SIZE;
         }
-      } else if (this.peek == '\t') {
+      } else if(this.peek == '\t') {
         indent += tab_size;
         tab_size = TAB_SIZE;
       } else {
         break;
       }
-      this.consume()
+      this.consume();
     }
+    this.indent = indent;
+  }
 
-    return [indent, true];
+  get_indent() {
+    return this.indent;
+  }
+
+  set_indent(indent: number) {
+    this.indent = indent;
   }
 
   consume(): void {
@@ -97,7 +100,6 @@ export class Scanner {
       }
     }
   }
-
 
   consume_if(c: string): boolean {
     if (this.peek == c) {
@@ -120,5 +122,6 @@ export class Scanner {
   private row: number = 1;
   private column = 0;
   private position: number = 0;
+  private indent:number = 0;
   private input: string;
 }

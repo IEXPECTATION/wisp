@@ -65,6 +65,7 @@ export class Parser {
 
         let index = 0;
         let matched = true;
+        this.scanner.get_indent();
         while (index < this.cached_nodes.length) {
           const cached_node = this.cached_nodes[index];
           switch (cached_node.tag) {
@@ -155,11 +156,12 @@ export class Parser {
   }
 
   private try_open_block(parent: Node): Node | null {
-    const [indent, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
+    if (this.scanner.is_eof()) {
       return null;
     }
 
+    this.scanner.skip_whitespace();
+    const indent = this.scanner.get_indent();
     const is_continuation_paragraph = this.is_continuation_paragraph();
     if (!is_continuation_paragraph && indent >= TAB_SIZE) {
       // indented code
@@ -167,7 +169,7 @@ export class Parser {
       if (indent > TAB_SIZE) {
         padding = indent - TAB_SIZE;
       }
-      return this.parse_indentedcode(parent, padding);
+      return this.parse_indentedcode(parent);
     }
 
     switch (this.scanner.peek) {
@@ -181,7 +183,7 @@ export class Parser {
           }
         }
 
-        let node = this.parse_unorderedlist(parent, indent);
+        let node = this.parse_unorderedlist(parent);
         if (node != null) {
           return node;
         }
@@ -197,7 +199,7 @@ export class Parser {
         return this.parse_thematicbreak(parent);
       case '+':
         // unordered list
-        return this.parse_unorderedlist(parent, indent);
+        return this.parse_unorderedlist(parent);
       case '>':
         // blockquote
         return this.parse_blockquote(parent);
@@ -207,7 +209,7 @@ export class Parser {
       case '~':
       case '`':
         // fenced code
-        return this.parse_fencedcode(parent, indent);
+        return this.parse_fencedcode(parent);
       case '<':
         // html block
         break;
@@ -259,20 +261,17 @@ export class Parser {
     }
   }
 
-  private parse_unorderedlist(parent: Node, offset: number): Node | null {
+  private parse_unorderedlist(parent: Node): Node | null {
     const anchor = this.scanner.get_anchor();
     const start = this.scanner.get_position();
     const row = this.scanner.get_row();
     const column = this.scanner.get_column();
+    let offset = this.scanner.get_indent() + 1;
     const bullet = this.scanner.peek;
-    offset += 1;
     this.scanner.consume();
 
-    const [indent, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      this.scanner.set_anchor(anchor);
-      return null;
-    }
+    this.scanner.skip_whitespace();
+    const indent = this.scanner.get_indent();
 
     if (indent == 0) {
       this.scanner.set_anchor(anchor);
@@ -396,19 +395,25 @@ export class Parser {
     return true;
   }
 
-  private parse_indentedcode(parent: Node, padding: number): Node | null {
+  private parse_indentedcode(parent: Node): Node | null {
     const row = this.scanner.get_row();
     const column = this.scanner.get_column();
     const start = this.scanner.get_position();
     this.scanner.consume_line();
     const end = this.scanner.get_position();
+  
+    const indent = this.scanner.get_indent();
+    let padding = 0;
+    if (indent > TAB_SIZE) {
+      padding = indent - TAB_SIZE;
+    }
 
     const icode = new Node(NODE_TAG.IndentedCode, { lines: [{ location: { row, column, start, end }, padding }] } as IndentedCodeContext);
     parent.push_node(icode);
     return icode;
   }
 
-  private parse_fencedcode(parent: Node, offset: number): Node | null {
+  private parse_fencedcode(parent: Node): Node | null {
     const anchor = this.scanner.get_anchor();
     const bullet = this.scanner.peek;
     if (bullet != '~' && bullet != '`') {
@@ -427,6 +432,7 @@ export class Parser {
     }
 
     // Skip the white spaces.
+    const offset = this.scanner.get_indent();
     this.scanner.skip_whitespace();
 
     const language_row = this.scanner.get_row();
@@ -478,12 +484,12 @@ export class Parser {
     // Check whether current line is a contination paragraph.
     // TODO:
     let is_continuation_paragraph = false;
-    if(this.cached_nodes.length) {
+    if (this.cached_nodes.length) {
       is_continuation_paragraph = (this.cached_nodes[this.cached_nodes.length - 1].tag == NODE_TAG.Paragraph);
     }
 
-    if(is_continuation_paragraph) {
-      
+    if (is_continuation_paragraph) {
+
     }
 
     // Check whether current line is a new list item?
@@ -492,10 +498,7 @@ export class Parser {
     }
 
     // Check whether current line is a list item.
-    const [indent, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      return LISTMATCHINGRESULT.NotMatched;
-    }
+    const indent = this.scanner.get_indent();
 
     const offset = (self.context as UnorderedListContext).offset;
     if (indent > offset) {
@@ -508,16 +511,12 @@ export class Parser {
   }
 
   private continue_listitem(self: Node): boolean {
-
     return false;
   }
 
   private continue_blockquote(): boolean {
     const anchor = this.scanner.get_anchor();
-    const [indent, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      return false;
-    }
+    const indent = this.scanner.get_indent();
 
     if (indent > 3) {
       this.scanner.set_anchor(anchor);
@@ -532,10 +531,7 @@ export class Parser {
 
   private cotninue_indentedcode(self: Node): boolean {
     const anchor = this.scanner.get_anchor();
-    const [indent, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      return false;
-    }
+    const indent = this.scanner.get_indent();
 
     if (indent < TAB_SIZE) {
       this.scanner.set_anchor(anchor);
@@ -558,10 +554,7 @@ export class Parser {
   }
 
   private continue_fencedcode(self: Node): boolean {
-    const [indent, ok] = this.scanner.skip_whitespace();
-    if (!ok) {
-      return false;
-    }
+    const indent = this.scanner.get_indent();
 
     // Check it is a close sequence.
     const ctx = self.context as FencedCodeContext;
