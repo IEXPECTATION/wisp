@@ -88,16 +88,18 @@ export class Scanner {
     if (this.position >= this.input.length) {
       this.peek = undefined;
     } else {
-      this.peek = this.input[this.position];
-      this.position += 1;
       if (this.peek == '\n') {
         this.row += 1;
         this.column = 1;
       } else if (this.peek == '\r') {
         this.consume_if('\n');
         this.row += 1;
+        this.column = 1;
+      } else {
         this.column += 1;
       }
+      this.peek = this.input[this.position];
+      this.position += 1;
     }
   }
 
