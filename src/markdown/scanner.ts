@@ -1,5 +1,3 @@
-export const ArriveEndOfInput = new Error("Arrive the end of input string.");
-
 export const TAB_SIZE = 4;
 
 export type Anchor = {
