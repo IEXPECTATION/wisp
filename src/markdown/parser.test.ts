@@ -347,3 +347,72 @@ test("unordered list test III", () => {
     ])
   }
 })
+
+test("thematic break test I", () => {
+  const input = "# Heading\n---\nParagraph";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Heading, "depth": 1 },
+      { "tag": NODE_TAG.ThematicBreak, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 },
+    ])
+  }
+})
+
+test("thematic break test II", () => {
+  const input = "# Heading\n___\nParagraph";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Heading, "depth": 1 },
+      { "tag": NODE_TAG.ThematicBreak, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 },
+    ])
+  }
+})
+
+test("thematic break test III", () => {
+  const input = "# Heading\n***\nParagraph";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Heading, "depth": 1 },
+      { "tag": NODE_TAG.ThematicBreak, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 },
+    ])
+  }
+})
+
+test("thematic break test IV", () => {
+  const input = "# Heading\n- - \t-\nParagraph";
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.Heading, "depth": 1 },
+      { "tag": NODE_TAG.ThematicBreak, "depth": 1 },
+      { "tag": NODE_TAG.Paragraph, "depth": 1 },
+    ])
+  }
+})
+

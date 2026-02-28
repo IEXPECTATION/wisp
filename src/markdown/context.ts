@@ -14,14 +14,12 @@ export type ListContext = {
   column: number,
   sn: number,
   marker: string,
-  indent: number,
   offset: number,
   tiny: boolean,
 }
 
 export type ListItemContext = {
   list_context: ListContext,
-  offset: number,
 };
 
 export type BlockQuoteContext = {

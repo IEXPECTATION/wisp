@@ -1,4 +1,4 @@
-import { BlockQuoteContext, FencedCodeContext, HeadingContext, IndentedCodeContext, ListContext, ListItemContext, ParagraphContext, ThematicBreakContext } from "./context";
+import { BlockQuoteContext, FencedCodeContext, HeadingContext, IndentedCodeContext, ListContext, ParagraphContext, ThematicBreakContext } from "./context";
 import { Node, NODE_TAG } from "./node";
 import { Scanner, TAB_SIZE } from "./scanner";
 
@@ -22,7 +22,7 @@ export class Parser {
     while (!this.scanner.is_eof()) {
       while (!this.scanner.is_eof()) {
         // Firstly, we try to open a new block.
-        const node = this.try_open_block(parent, true);
+        const node = this.try_open_block(parent);
 
         if (node == null) {
           return null;
@@ -116,7 +116,7 @@ export class Parser {
           if (index != 0) {
             cur_parent = this.cached_nodes[index - 1];
           }
-          const node = this.try_open_block(cur_parent, false);
+          const node = this.try_open_block(cur_parent);
           if (node == null) {
             return null;
           }
@@ -145,7 +145,7 @@ export class Parser {
     return null;
   }
 
-  private try_open_block(parent: Node, should_skip_whithespace: boolean): Node | null {
+  private try_open_block(parent: Node): Node | null {
     // If the parent is unordered list or ordered list, we should create a list item node.
     if (parent.tag == NODE_TAG.UnorderedList || parent.tag == NODE_TAG.OrderedList) {
       const li = new Node(NODE_TAG.ListItem, parent.context);
@@ -153,9 +153,7 @@ export class Parser {
       return li;
     }
 
-    if (should_skip_whithespace) {
-      this.scanner.skip_whitespace();
-    }
+    this.scanner.skip_whitespace();
     const is_continuation_paragraph = this.is_continuation_paragraph();
     if (!is_continuation_paragraph && this.scanner.indent >= TAB_SIZE) {
       // indented code
@@ -176,6 +174,8 @@ export class Parser {
             return node;
           }
         }
+
+        // TODO: Parse the task list.
 
         let node = this.parse_unorderedlist(parent);
         if (node != null) {
@@ -258,13 +258,13 @@ export class Parser {
 
     this.scanner.skip_whitespace();
     let offset = this.scanner.indent;
-    if (indent < 1 || indent > TAB_SIZE) {
+    if (offset < 1 || offset > TAB_SIZE) {
       this.scanner.set_anchor(anchor);
       return null;
     }
 
     offset += indent;
-    const ul = new Node(NODE_TAG.UnorderedList, { row, column, sn: 0, marker: bullet, indent, offset, tiny: true } as ListContext)
+    const ul = new Node(NODE_TAG.UnorderedList, { row, column, sn: 0, marker: bullet, offset, tiny: true } as ListContext)
     parent.push_node(ul);
     return ul;
   }
@@ -504,14 +504,16 @@ export class Parser {
   }
 
   private continue_listitem(self: Node): boolean {
-    const anchor = this.scanner.get_anchor();
-
     const context = self.context as ListContext;
     if (this.scanner.indent <= context.offset) {
       // Check that the current line is not a same list item.
       const peek = this.scanner.peek;
       if (peek == '-' || peek == '*' || peek == '+') {
-        return false;
+        this.scanner.consume(); // We consume list marker here, then we don't consume them in the try_open_block.
+        this.scanner.skip_whitespace();
+        if (this.scanner.indent >= 1 && this.scanner.indent <= TAB_SIZE) {
+          return false;
+        }
       }
     }
 
