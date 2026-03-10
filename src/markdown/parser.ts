@@ -495,7 +495,8 @@ export class Parser {
 
     this.scanner.skip_whitespace();
     const context = self.context as ListContext;
-    if (this.scanner.indent < TAB_SIZE || this.scanner.indent >= context.offset) {
+    // check whether indent is larger than and euqal to offset of the current unordered list or the first character is unordered list marker.
+    if (this.scanner.indent >= context.offset || this.scanner.peek == context.marker) {
       return true;
     }
 
