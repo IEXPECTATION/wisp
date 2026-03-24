@@ -473,7 +473,7 @@ test("unordered list test XI", () => {
   }
 })
 
-test("unordered list test XI", () => {
+test("unordered list test XII", () => {
   const input = "- paragraph\n - paragraph"
   const scanner = new Scanner(input);
   const parser = new Parser(scanner);
@@ -486,6 +486,25 @@ test("unordered list test XI", () => {
       { "tag": NODE_TAG.UnorderedList, "depth": 1 },
       { "tag": NODE_TAG.ListItem, "depth": 2 },
       { "tag": NODE_TAG.Paragraph, "depth": 3 },
+      { "tag": NODE_TAG.ListItem, "depth": 2 },
+      { "tag": NODE_TAG.Paragraph, "depth": 3 },
+    ])
+  }
+})
+
+test("unordered list test XIII", () => {
+  const input = "-     intended code.\n         indented code too!"
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner);
+  const root = parser.parse();
+  // console.dir(root, {depth: Infinity});
+  expect(root instanceof Node).toEqual(true);
+  if (root instanceof Node) {
+    check_node_dfs(root, [
+      { "tag": NODE_TAG.Document, "depth": 0 },
+      { "tag": NODE_TAG.UnorderedList, "depth": 1 },
+      { "tag": NODE_TAG.ListItem, "depth": 2 },
+      { "tag": NODE_TAG.InlineEnd, "depth": 3 },
     ])
   }
 })

@@ -81,7 +81,7 @@ export class Parser {
               }
               break;
             case NODE_TAG.IndentedCode:
-              if (!this.cotninue_indentedcode(cached_node)) {
+              if (!this.continue_indentedcoder(cached_node)) {
                 matched = false;
               }
               break;
@@ -258,7 +258,7 @@ export class Parser {
 
     this.scanner.skip_whitespace();
     let offset = this.scanner.indent;
-    if (offset < 1 || offset > TAB_SIZE) {
+    if (offset < 1 || offset > TAB_SIZE + 1) {
       this.scanner.set_anchor(anchor);
       return null;
     }
@@ -295,9 +295,14 @@ export class Parser {
     let length = 1;
     const bullet = this.scanner.peek;
     this.scanner.consume();
-    while (this.scanner.peek && (this.scanner.peek == ' ' || this.scanner.peek == '\t' || this.scanner.peek == bullet)) {
+    while (this.scanner.peek) {
+      if (this.scanner.peek == bullet) {
+        length += 1;
+      } else if(this.scanner.peek != ' ' && this.scanner.peek != '\t') {
+        break;
+      } else {
+      }
       this.scanner.consume();
-      length += 1;
     }
 
     if (length < 3) {
@@ -539,7 +544,7 @@ export class Parser {
     return false;
   }
 
-  private cotninue_indentedcode(self: Node): boolean {
+  private continue_indentedcoder(self: Node): boolean {
     const anchor = this.scanner.get_anchor();
     this.scanner.skip_whitespace();
 
