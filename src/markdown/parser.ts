@@ -19,8 +19,8 @@ export class Parser {
 
   private parse_block(root: Node): Error | null {
     let parent = root;
-    while (!this.scanner.is_eof()) {
-      while (!this.scanner.is_eof()) {
+    while (!this.scanner.is_eos()) {
+      while (!this.scanner.is_eos()) {
         // Firstly, we try to open a new block.
         const node = this.try_open_block(parent);
 
@@ -49,7 +49,7 @@ export class Parser {
       }
 
       // Continue to parse the next line.
-      while (!this.scanner.is_eof()) {
+      while (!this.scanner.is_eos()) {
         // parse the multiple lines block
         if (this.cached_nodes.length == 0) {
           break;
@@ -494,7 +494,7 @@ export class Parser {
       }
     }
 
-    if (this.scanner.is_eof()) {
+    if (this.scanner.is_eos()) {
       return false;
     }
 
